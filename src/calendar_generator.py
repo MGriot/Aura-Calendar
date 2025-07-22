@@ -74,16 +74,19 @@ def generate_calendar_table(
             "regional",
         ]
 
-    start_dt = (
-        pd.to_datetime(start_datetime, format=date_format)
-        if date_format
-        else pd.to_datetime(start_datetime)
-    )
-    end_dt = (
-        pd.to_datetime(end_datetime, format=date_format)
-        if date_format
-        else pd.to_datetime(end_datetime)
-    )
+    try:
+        start_dt = (
+            pd.to_datetime(start_datetime, format=date_format)
+            if date_format
+            else pd.to_datetime(start_datetime)
+        )
+        end_dt = (
+            pd.to_datetime(end_datetime, format=date_format)
+            if date_format
+            else pd.to_datetime(end_datetime)
+        )
+    except ValueError as e:
+        raise ValueError(f"Invalid date format or value for start/end datetime: {e}")
 
     try:
         full_range = pd.date_range(start=start_dt, end=end_dt, freq=freq, tz="UTC")
@@ -114,17 +117,20 @@ def generate_calendar_table(
         chunk_args.append((chunk, regions, column_groups))
 
     results = []
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        for idx, df in enumerate(
-            tqdm(
-                executor.map(process_chunk, chunk_args),
-                total=len(chunk_args),
-                desc="Generating calendar",
-                unit="chunk",
-            )
-        ):
-            print(f"[Chunk {idx+1}/{len(chunk_args)}] Processed {len(df):,} rows.")
-            results.append(df)
+    try:
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            for idx, df in enumerate(
+                tqdm(
+                    executor.map(process_chunk, chunk_args),
+                    total=len(chunk_args),
+                    desc="Generating calendar",
+                    unit="chunk",
+                )
+            ):
+                print(f"[Chunk {idx+1}/{len(chunk_args)}] Processed {len(df):,} rows.")
+                results.append(df)
+    except Exception as e:
+        raise RuntimeError(f"Error during parallel processing: {e}")
 
     final_df = pd.concat(results, ignore_index=True)
     print(f"[Info] Calendar generation completed. Total rows: {len(final_df):,}")

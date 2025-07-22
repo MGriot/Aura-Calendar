@@ -286,7 +286,8 @@ def add_country_business_day_flags(
             )
         except Exception as e:
             print(f"[Warning] Could not generate holidays for {country}: {e}")
-            df[f"IsBusinessDay_{country}"] = None
+            df[f"IsHolidayDay_{country}"] = False  # Default to False on error
+            df[f"IsBusinessDay_{country}"] = False  # Default to False on error
 
     return df
 
@@ -330,12 +331,15 @@ def save_calendar(df, filename, format="csv"):
         raise ValueError("Unsupported format. Choose from 'csv', 'excel', or 'json'.")
 
     print(f"[Info] Saving to {full_path} ...")
-    if format == "csv":
-        df.to_csv(full_path, index=False)
-    elif format == "excel":
-        df.to_excel(full_path, index=False)
-    elif format == "json":
-        df.to_json(full_path, orient="records", date_format="iso")
+    try:
+        if format == "csv":
+            df.to_csv(full_path, index=False)
+        elif format == "excel":
+            df.to_excel(full_path, index=False)
+        elif format == "json":
+            df.to_json(full_path, orient="records", date_format="iso")
+    except Exception as e:
+        raise IOError(f"Error saving calendar to {full_path}: {e}")
 
     # Define the date column explicitly
     date_col = "date_utc"  # or set to the correct column name if different
