@@ -178,9 +178,31 @@ def calculate_itt_fiscal_columns(
     }
 
     df = assign_fiscal_periods_strict(df, date_col, boundaries_by_year)
-    # df['YearITTFiscalMonth'] = df['ITTFiscalYear'].astype(str) + " " + df['ITTFiscalMonth'].astype(str).str.zfill(2)
-    # df['ITTFiscalCalendar'] = df['ITTFiscalYear'].astype(str) + "-" + df['ITTFiscalMonth'].astype(str).str.zfill(2)
-    # df['ITTFiscalQuarter'] = ((df['ITTFiscalMonth'] - 1) // 3) + 1
+    df["is_first_day_of_fiscal_period"] = False
+    df["is_last_day_of_fiscal_period"] = False
+
+    utc = pytz.UTC
+
+    for year, boundaries in boundaries_by_year.items():
+        for start_dt, end_dt in boundaries:
+            # Ensure start and end are timezone-aware for comparison
+            if start_dt.tzinfo is None:
+                start_dt = utc.localize(start_dt)
+            if end_dt.tzinfo is None:
+                end_dt = utc.localize(end_dt)
+
+            # Mark the first day of the fiscal period
+            df.loc[
+                (df[date_col].dt.date == start_dt.date())
+                & (df[date_col].dt.year == year),
+                "is_first_day_of_fiscal_period",
+            ] = True
+            # Mark the last day of the fiscal period
+            df.loc[
+                (df[date_col].dt.date == end_dt.date())
+                & (df[date_col].dt.year == year),
+                "is_last_day_of_fiscal_period",
+            ] = True
     return df
 
 
@@ -247,10 +269,13 @@ def add_country_business_day_flags(
 ):
     """
     Add business day flags for specified countries to a DataFrame based on weekends and national holidays.
+    Also adds holiday name.
 
     This function adds two columns per country:
     - 'IsHolidayDay_<country>': True if the date is a public holiday in the specified country.
     - 'IsBusinessDay_<country>': True if the date is a business day (i.e., not a weekend and not a holiday).
+    - 'HolidayName_<country>': Name of the holiday if it's a holiday, otherwise None.
+    - 'HolidayName_<country>': Name of the holiday if it's a holiday, otherwise None.
 
     Parameters
     ----------
@@ -268,6 +293,7 @@ def add_country_business_day_flags(
         The original DataFrame with additional columns for each country:
         - 'IsHolidayDay_<country>'
         - 'IsBusinessDay_<country>'
+        - 'HolidayName_<country>'
 
     Notes
     -----
@@ -276,19 +302,27 @@ def add_country_business_day_flags(
     - The function assumes that weekends are Saturday and Sunday.
     """
     years = df[date_col].dt.year.unique().tolist()
+    all_dates = df[date_col].dt.date.unique()
 
     for country in countries:
+        df[f"HolidayName_{country}"] = None # Initialize with None
         try:
             holiday_calendar = holidays.CountryHoliday(country, years=years)
+            # Create a Series mapping dates to holiday names
+            holiday_names_map = {date: name for date, name in holiday_calendar.items()}
+
             df[f"IsHolidayDay_{country}"] = df[date_col].dt.date.isin(holiday_calendar)
+            df.loc[df[f"IsHolidayDay_{country}"], f"HolidayName_{country}"] = \
+                df.loc[df[f"IsHolidayDay_{country}"], date_col].dt.date.map(holiday_names_map)
+
             df[f"IsBusinessDay_{country}"] = (~df["is_weekend"]) & (
-                ~df[date_col].dt.date.isin(holiday_calendar)
+                ~df[f"IsHolidayDay_{country}"]
             )
         except Exception as e:
             print(f"[Warning] Could not generate holidays for {country}: {e}")
             df[f"IsHolidayDay_{country}"] = False  # Default to False on error
             df[f"IsBusinessDay_{country}"] = False  # Default to False on error
-
+            df[f"HolidayName_{country}"] = None # Ensure it's None on error
     return df
 
 
@@ -406,6 +440,36 @@ def add_regional_columns(df, regions, datetime_col="datetime_utc"):
         df[f"is_dst_{region_col}"] = df[dt_col].apply(
             lambda x: bool(x.dst() and x.dst().total_seconds() != 0)
         )
+        # Add UTC offset in minutes
+        df[f"utc_offset_minutes_{region_col}"] = df[dt_col].apply(
+            lambda x: int(x.utcoffset().total_seconds() / 60)
+            if x.utcoffset() is not None else 0
+        )
+        # Identify ambiguous and imaginary times for DST transitions
+        # Need to re-localize to handle ambiguous/imaginary times, passing 'ambiguous' and 'nonexistent'
+        # First, remove timezone to re-localize
+        localized_dt_naive = df[datetime_col].dt.tz_localize(None) # Ensure naive for pytz.localize
+
+        def check_ambiguous(naive_dt, timezone):
+            try:
+                timezone.localize(naive_dt, is_dst=None)
+                return False
+            except pytz.exceptions.AmbiguousTimeError:
+                return True
+            except pytz.exceptions.NonExistentTimeError:
+                return False # Not ambiguous, but non-existent
+
+        def check_imaginary(naive_dt, timezone):
+            try:
+                timezone.localize(naive_dt, is_dst=None)
+                return False
+            except pytz.exceptions.NonExistentTimeError:
+                return True
+            except pytz.exceptions.AmbiguousTimeError:
+                return False # Not non-existent, but ambiguous
+
+        df[f"is_ambiguous_time_{region_col}"] = localized_dt_naive.apply(lambda x: check_ambiguous(x, tz))
+        df[f"is_imaginary_time_{region_col}"] = localized_dt_naive.apply(lambda x: check_imaginary(x, tz))
     return df
 
 
@@ -419,7 +483,7 @@ def add_extra_calendar_columns(df, datetime_col="datetime_utc"):
     # Half of quarter (1 or 2)
     df["half_of_quarter"] = dt.dt.month.apply(lambda m: 1 if (m - 1) % 3 < 1.5 else 2)
     # Day of quarter
-    df["day_of_quarter"] = (dt - dt.dt.to_period("Q").dt.start_time).dt.days + 1
+    df["day_of_quarter"] = (dt - dt.dt.to_period("Q").dt.start_time.dt.tz_localize(dt.dt.tz)).dt.days + 1
     # Fiscal year (if different from calendar year, e.g., starts in July)
     df["fiscal_year_jul"] = dt.apply(lambda x: x.year if x.month >= 7 else x.year - 1)
     # Week of quarter
@@ -436,6 +500,57 @@ def add_extra_calendar_columns(df, datetime_col="datetime_utc"):
     df["is_last_business_day_year"] = False
     last_biz_idx = df[df["day_of_week"] < 5].groupby("year")["datetime_utc"].idxmax()
     df.loc[last_biz_idx, "is_last_business_day_year"] = True
+    # Biweekly period number (1-26 per year)
+    df["biweekly_period_number"] = (dt.dt.dayofyear - 1) // 14 + 1
+    return df
+
+
+def add_seasonality_columns(df: pd.DataFrame, datetime_col: str = "datetime_utc") -> pd.DataFrame:
+    """
+    Add seasonality columns to the DataFrame (Northern Hemisphere based).
+    """
+    dt = df[datetime_col]
+    month = dt.dt.month
+    day = dt.dt.day
+
+    # Astronomical Season (Northern Hemisphere) - Simplified
+    # Spring: March (20-31), April, May, June (1-20)
+    # Summer: June (21-30), July, August, September (1-22)
+    # Autumn: September (23-30), October, November, December (1-21)
+    # Winter: December (22-31), January, February, March (1-19)
+    conditions_astronomical = [
+        ((month == 3) & (day >= 20)) | (month.isin([4, 5])) | ((month == 6) & (day < 21)), # Spring
+        ((month == 6) & (day >= 21)) | (month.isin([7, 8])) | ((month == 9) & (day < 23)), # Summer
+        ((month == 9) & (day >= 23)) | (month.isin([10, 11])) | ((month == 12) & (day < 22)), # Autumn
+        ((month == 12) & (day >= 22)) | (month.isin([1, 2])) | ((month == 3) & (day < 20)), # Winter
+    ]
+    choices_astronomical = ["Spring", "Summer", "Autumn", "Winter"]
+    df["season_astronomical"] = np.select(conditions_astronomical, choices_astronomical, default=None)
+
+    # Meteorological Season (Northern Hemisphere)
+    # Spring: March, April, May
+    # Summer: June, July, August
+    # Autumn: September, October, November
+    # Winter: December, January, February
+    conditions_meteorological = [
+        (month.isin([3, 4, 5])),
+        (month.isin([6, 7, 8])),
+        (month.isin([9, 10, 11])),
+        (month.isin([12, 1, 2]))
+    ]
+    choices_meteorological = ["Spring", "Summer", "Autumn", "Winter"]
+    df["season_meteorological"] = np.select(conditions_meteorological, choices_meteorological, default=None)
+
+    return df
+
+
+def add_key_columns(df: pd.DataFrame, datetime_col: str = "datetime_utc") -> pd.DataFrame:
+    """
+    Add interoperability and master key columns to the DataFrame.
+    """
+    dt = df[datetime_col]
+    df["date_key"] = dt.dt.strftime("%Y%m%d").astype(int)
+    df["datetime_key"] = dt.dt.strftime("%Y%m%d%H%M%S").astype(np.int64)
     return df
 
 
@@ -451,6 +566,8 @@ def get_column_group_functions():
         "country_business": add_country_business_day_flags,
         "regional": add_regional_columns,
         "extra": add_extra_calendar_columns,
+        "keys": add_key_columns,
+        "seasonality": add_seasonality_columns,
     }
 
 

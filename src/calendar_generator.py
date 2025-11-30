@@ -10,7 +10,7 @@ from calendar_utils import (
 
 
 def process_chunk(args):
-    chunk, regions, column_groups = args
+    chunk, regions, column_groups, countries_for_holidays = args
     df = pd.DataFrame({"datetime_utc": chunk})
     df["date_utc"] = df["datetime_utc"].dt.date
     group_funcs = get_column_group_functions()
@@ -18,6 +18,8 @@ def process_chunk(args):
         func = group_funcs[group]
         if group == "regional":
             df = func(df, regions)
+        elif group == "country_business":
+            df = func(df, countries=countries_for_holidays)
         else:
             df = func(df)
     return df
@@ -32,6 +34,7 @@ def generate_calendar_table(
     regions=None,
     column_groups=None,
     n_workers=None,
+    countries=None, # Added
 ) -> pd.DataFrame:
     """
     Generate a comprehensive calendar table with user-selectable column groups, using parallel processing.
@@ -54,6 +57,8 @@ def generate_calendar_table(
         List of column group names to include. Defaults to all.
     n_workers : int, optional
         Number of parallel processes to use. Defaults to number of CPU cores.
+    countries : list of str, optional
+        List of ISO 3166-1 alpha-2 country codes for which to compute business day flags.
 
     Returns
     -------
@@ -63,6 +68,8 @@ def generate_calendar_table(
 
     if regions is None:
         regions = ["US/Eastern", "Europe/Rome", "Asia/Tokyo"]
+    if countries is None: # Added
+        countries = ["IT", "CZ", "CN", "MX"] # Added default countries for holidays
 
     if column_groups is None:
         column_groups = [
@@ -72,6 +79,9 @@ def generate_calendar_table(
             "additional",
             "country_business",
             "regional",
+            "extra",
+            "keys",
+            "seasonality",
         ]
 
     try:
@@ -114,7 +124,7 @@ def generate_calendar_table(
     chunk_args = []
     for i in range(0, len(full_range), chunk_size):
         chunk = full_range[i : i + chunk_size]
-        chunk_args.append((chunk, regions, column_groups))
+        chunk_args.append((chunk, regions, column_groups, countries)) # Added countries
 
     results = []
     try:
@@ -142,9 +152,10 @@ if __name__ == "__main__":
     end = "2035-12-31"
     freq = "D"
     regions = ["Europe/Rome", "Europe/Prague", "Asia/Shanghai", "America/Mexico_City"]
+    countries = ["US", "IT"] # Example countries for main execution
 
     calendar_df = generate_calendar_table(
-        start, end, freq=freq, regions=regions, n_workers=8
+        start, end, freq=freq, regions=regions, countries=countries, n_workers=8
     )
     print("[Info] Saving calendar to disk...")
     save_calendar(

@@ -36,6 +36,8 @@ def main():
             "country_business",
             "regional",
             "extra",
+            "keys",
+            "seasonality",
         ],
         help="List of column groups to include (e.g., 'standard fiscal')",
     )
