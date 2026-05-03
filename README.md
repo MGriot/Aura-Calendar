@@ -1,36 +1,39 @@
-# Calendar Table Generator
+# Aura Calendar
 
 ## Overview
 
-This project provides a highly customizable and comprehensive calendar table generator in Python, designed for various analytical and reporting needs. It supports:
-
--   Standard calendar columns (date, time, year, month, week, etc.)
--   Fiscal calendar columns (ITT 4-4-5 pattern)
--   Extended columns (week of month, leap year, business day flags, etc.)
--   Regional columns (localized datetimes, DST, business EOM, etc.)
--   Business day and holiday flags for multiple countries
--   Extra analytics columns (semester, half of quarter, fiscal year July, week of quarter, etc.)
--   Parallel processing for fast generation on multi-core systems
-
-The generator is modular, efficient, and suitable for large date ranges and multiple timezones.
-
-## Documentation
-
-For detailed information on usage, modules, column explanations, customization, and performance, please refer to the [full documentation](./docs/index.md).
+Aura Calendar is a high-density, professional planning suite and a comprehensive calendar table generator. The project has evolved to include a modern web application consisting of a React/Vite frontend and a FastAPI backend, alongside its original robust calendar table generator script.
 
 ## Main Features
 
--   **Standard Columns:** year, month, quarter, week, day, hour, minute, second, etc.
--   **Fiscal Columns:** ITT fiscal month, week, and period boundaries.
--   **Extended Columns:** week of month, is leap year, is year start/end, days in month/year, etc.
--   **Regional Columns:** Localized datetimes, DST flag, business day flags, business EOM flags for each region.
--   **Holiday/Business Day Flags:** For IT, CZ, CN, MX (customizable).
--   **Extra Columns:** semester, half_of_quarter, day_of_quarter, fiscal_year_jul, week_of_quarter, is_week_end, is_penultimate_day_of_month, is_first_business_day_month, is_last_business_day_year, etc.
--   **Parallel Processing:** Uses all available CPU cores by default for fast generation.
+### Web Application
+- **Frontend:** A React/Vite based user interface designed for a professional visual organization, including a continuous multi-day event banners system, "Day Explosion" modal, and dynamic color mapping.
+- **Backend:** A lightweight FastAPI server providing endpoints to generate calendar data and load events.
+- **Dockerized Environment:** The entire application stack is containerized using Docker and Docker Compose for easy deployment and development.
 
-## Usage
+### Calendar Table Generator (CLI/Python)
+- **Standard & Extended Columns:** date, time, year, month, week, ITT 4-4-5 pattern, week of month, leap year flags, etc.
+- **Regional Support:** Localized datetimes, DST, business EOM flags, holidays for IT, CZ, CN, MX.
+- **Performance:** Parallel processing for fast generation on multi-core systems.
 
-### CLI
+## Documentation
+
+For detailed information on usage, architecture, and running the web app, please refer to the [full documentation](./docs/index.md).
+
+## Running the Web Application
+
+The easiest way to run the web application (both frontend and backend) is via Docker Compose:
+
+```sh
+docker-compose up --build
+```
+
+- **Frontend:** Available at `http://localhost:5173`
+- **Backend API:** Available at `http://localhost:8000`
+
+For more detailed instructions, including running locally without Docker, see the [Running the App Documentation](./docs/running_the_app.md).
+
+## Usage - Calendar Table Generator (CLI)
 
 To generate a calendar table using the command-line interface:
 
@@ -40,44 +43,6 @@ python src/calendar_generator_cli.py --start 2023-01-01 --end 2023-12-31 --freq 
 
 For more detailed usage instructions and examples, see the [Usage Documentation](./docs/usage.md).
 
-### Visualization
-
-To visualize business end-of-month (EOM) days from a generated calendar file:
-
-```sh
-python src/visualize_business_eom.py calendar_2023.csv --region Europe_Rome --save eom_heatmap.png
-```
-
-### Testing
-
-To run the unit tests for the calendar generator:
-
-```sh
-pip install pandas pytz
-python -m unittest src/test_calendar_generator.py
-```
-
-## Customization
-
-The generator is highly customizable. You can:
-
--   Add/remove regions or countries in the generator arguments.
--   Extend with more fiscal or business logic as needed.
--   Select which column groups to include via the `column_groups` argument.
--   Use all available CPU cores by default, or specify `n_workers` for parallel processing.
-
-For a complete guide on customization options, refer to the [Customization Documentation](./docs/customization.md).
-
-## Performance
-
-The generator is optimized for performance, especially for large date ranges, utilizing chunking and parallel processing. For more details, see the [Performance Documentation](./docs/performance.md).
-
 ## License
 
 MIT License
-
-## Authors
-
-- Your Name
-
----
