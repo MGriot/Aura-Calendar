@@ -1,0 +1,20 @@
+{
+  "colors": {
+    "background": "#0f172a",
+    "surface": "#1e293b",
+    "surfaceHover": "#334155",
+    "textPrimary": "#f8fafc",
+    "textSecondary": "#94a3b8",
+    "border": "#334155",
+    "accentBlue": "#3b82f6",
+    "accentRed": "#ef4444",
+    "accentGreen": "#22c55e",
+    "eventSprint": "#1d4ed8",
+    "eventReview": "#15803d",
+    "eventAudit": "#0369a1",
+    "eventGoal": "#b91c1c"
+  },
+  "fonts": {
+    "main": "Inter, system-ui, sans-serif"
+  }
+}

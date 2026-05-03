@@ -1,0 +1,17 @@
+{
+  "csv_path": "/app/uploads/test_events.csv",
+  "external_url": "/data/test_events.csv",
+  "col_start_date": "start_date",
+  "col_end_date": "end_date",
+  "col_event_name": "activity",
+  "col_category": "type",
+  "date_format": "%Y-%m-%d",
+  "color_map": {
+    "Meeting": "#5e6c82",
+    "Training": "#10b981",
+    "Event": "#f59e0b",
+    "Health": "#ef4444",
+    "Holiday": "#8b5cf6"
+  },
+  "reload_interval": 5
+}

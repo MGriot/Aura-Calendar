@@ -1,0 +1,19 @@
+start_date,end_date,event_name,category
+2026-01-01,2026-01-01,New Year's Day,holiday
+2026-01-19,2026-01-19,MLK Day,holiday
+2026-02-14,2026-02-14,Valentine's Day,holiday
+2026-02-16,2026-02-16,Presidents' Day,holiday
+2026-03-17,2026-03-17,St. Patrick's Day,holiday
+2026-04-05,2026-04-05,Easter Sunday,holiday
+2026-04-15,2026-04-15,Tax Day,deadline
+2026-01-05,2026-01-09,Sprint Planning,sprint
+2026-01-26,2026-01-30,Sprint Review,sprint
+2026-02-02,2026-02-06,Design Sprint,sprint
+2026-02-23,2026-02-27,Demo Week,review
+2026-03-09,2026-03-13,Q1 Retrospective,review
+2026-03-23,2026-03-27,Architecture Review,review
+2026-04-06,2026-04-10,Q2 Kickoff,meeting
+2026-04-20,2026-04-24,Release Prep,deadline
+2026-01-12,2026-01-12,Team Standup,meeting
+2026-02-09,2026-02-09,Board Meeting,meeting
+2026-03-02,2026-03-02,All-Hands,meeting

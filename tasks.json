@@ -1,0 +1,200 @@
+[
+  {
+    "id": "INFRA-01",
+    "title": "Set up CSS variables and Theme Engine",
+    "description": "Define CSS variables for both light and dark modes in index.css. Implement basic theme loading logic in App.jsx.",
+    "status": "done",
+    "priority": "high",
+    "linked_req": "Theme Engine",
+    "target_files": ["frontend/src/index.css", "frontend/src/App.jsx"],
+    "verification_method": "Check if data-theme='light' attribute changes colors on the body.",
+    "acceptance_criteria": [
+      "CSS variables defined for background, text, and surfaces",
+      "data-theme attribute support in index.css",
+      "Initial theme load from localStorage in App.jsx"
+    ],
+    "dependencies": [],
+    "blocked_by": null,
+    "tags": ["infra", "css", "frontend"],
+    "estimated_minutes": 20,
+    "actual_minutes": 15,
+    "created_at": "2026-05-03T14:59:00Z",
+    "updated_at": "2026-05-03T15:00:30Z"
+  },
+  {
+    "id": "NAV-01",
+    "title": "Implement Top Tab Navigation",
+    "description": "Create TabNavigation component and manage activeTab state in App.jsx.",
+    "status": "done",
+    "priority": "high",
+    "linked_req": "Tabbed Navigation",
+    "target_files": ["frontend/src/App.jsx", "frontend/src/components/Header.jsx"],
+    "verification_method": "Clicking tabs switches view content.",
+    "acceptance_criteria": [
+      "Tabs for Dashboard, Month, Week, Events visible in Header",
+      "Active tab state managed in App.jsx",
+      "Switching tabs re-renders the main content area"
+    ],
+    "dependencies": ["INFRA-01"],
+    "blocked_by": null,
+    "tags": ["ui", "frontend"],
+    "estimated_minutes": 30,
+    "actual_minutes": 25,
+    "created_at": "2026-05-03T14:59:00Z",
+    "updated_at": "2026-05-03T15:01:30Z"
+  },
+  {
+    "id": "SET-01",
+    "title": "Update SettingsModal with Theme Toggle",
+    "description": "Add theme switching UI to SettingsModal and ensure it updates the global theme state.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "Theme Engine",
+    "target_files": ["frontend/src/components/SettingsModal.jsx"],
+    "verification_method": "Toggle theme in settings and see colors change instantly.",
+    "acceptance_criteria": [
+      "Theme toggle switch in settings",
+      "Instant visual feedback on toggle",
+      "Preference persists across reloads"
+    ],
+    "dependencies": ["INFRA-01"],
+    "blocked_by": null,
+    "tags": ["settings", "frontend"],
+    "estimated_minutes": 20,
+    "actual_minutes": 15,
+    "created_at": "2026-05-03T15:01:30Z",
+    "updated_at": "2026-05-03T15:02:30Z"
+  },
+  {
+    "id": "SET-02",
+    "title": "Add File Dropzone and External URL",
+    "description": "Enhance SettingsModal with a file dropzone for uploads and a text field for external URLs.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "Hybrid File Management",
+    "target_files": ["frontend/src/components/SettingsModal.jsx", "backend/main.py"],
+    "verification_method": "Upload a file via drag-drop and verify it loads events.",
+    "acceptance_criteria": [
+      "Visual dropzone for CSV files",
+      "External URL/Path input field",
+      "Settings persistence for external URL"
+    ],
+    "dependencies": ["SET-01"],
+    "blocked_by": null,
+    "tags": ["settings", "frontend", "backend"],
+    "estimated_minutes": 40,
+    "actual_minutes": 35,
+    "created_at": "2026-05-03T15:01:30Z",
+    "updated_at": "2026-05-03T15:03:30Z"
+  },
+  {
+    "id": "DASH-01",
+    "title": "Create DashboardView with basic stat cards",
+    "description": "Implement DashboardView component with total events count, category breakdown, and 'Next Event' highlight.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "Statistical Recap",
+    "target_files": ["frontend/src/components/DashboardView.jsx", "frontend/src/App.jsx"],
+    "verification_method": "View dashboard tab and see stats.",
+    "acceptance_criteria": [
+      "Summary cards for Total Events",
+      "Pie or Bar chart for Category distribution",
+      "Active 'Coming Soon' placeholders removed"
+    ],
+    "dependencies": ["NAV-01"],
+    "blocked_by": null,
+    "tags": ["dashboard", "frontend"],
+    "estimated_minutes": 60,
+    "actual_minutes": 50,
+    "created_at": "2026-05-03T15:03:30Z",
+    "updated_at": "2026-05-03T15:04:30Z"
+  },
+  {
+    "id": "DASH-02",
+    "title": "Implement 'Next Event' countdown logic",
+    "description": "Calculate the nearest upcoming event and display a live countdown on the Dashboard.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "Statistical Recap",
+    "target_files": ["frontend/src/components/DashboardView.jsx"],
+    "verification_method": "Check if the Dashboard shows a countdown to the next event.",
+    "acceptance_criteria": [
+      "Nearest upcoming event identified",
+      "Live countdown (Days/Hours/Mins)",
+      "Dynamic update when calendar data changes"
+    ],
+    "dependencies": ["DASH-01"],
+    "blocked_by": null,
+    "tags": ["dashboard", "frontend"],
+    "estimated_minutes": 40,
+    "actual_minutes": 30,
+    "created_at": "2026-05-03T15:04:30Z",
+    "updated_at": "2026-05-03T15:05:30Z"
+  },
+  {
+    "id": "WEEK-01",
+    "title": "Implement WeekView with horizontal timeline",
+    "description": "Create a WeekView component that displays the current week's events in a horizontal timeline or list format.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "Week View",
+    "target_files": ["frontend/src/components/WeekView.jsx", "frontend/src/App.jsx"],
+    "verification_method": "View week tab and see a clear timeline of the current week.",
+    "acceptance_criteria": [
+      "7-day horizontal scroll or list",
+      "Event duration visualization (start to end)",
+      "Current day highlighted"
+    ],
+    "dependencies": ["NAV-01"],
+    "blocked_by": null,
+    "tags": ["week", "frontend"],
+    "estimated_minutes": 60,
+    "actual_minutes": 45,
+    "created_at": "2026-05-03T15:05:30Z",
+    "updated_at": "2026-05-03T15:06:30Z"
+  },
+  {
+    "id": "LIST-01",
+    "title": "Implement EventListView (Nearest Events)",
+    "description": "Create EventListView component to display a sorted list of all upcoming events.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "Nearest Events",
+    "target_files": ["frontend/src/components/EventListView.jsx", "frontend/src/App.jsx"],
+    "verification_method": "View events tab and see a list of upcoming events.",
+    "acceptance_criteria": [
+      "Sorted list of events by date",
+      "Search/Filter by category",
+      "Empty state for no events"
+    ],
+    "dependencies": ["NAV-01"],
+    "blocked_by": null,
+    "tags": ["events", "frontend"],
+    "estimated_minutes": 40,
+    "actual_minutes": 35,
+    "created_at": "2026-05-03T15:06:30Z",
+    "updated_at": "2026-05-03T15:07:30Z"
+  },
+  {
+    "id": "CLEANUP-01",
+    "title": "Final UI polish and responsive check",
+    "description": "Review all views for visual consistency, fix any remaining CSS issues, and ensure smooth transitions.",
+    "status": "done",
+    "priority": "low",
+    "linked_req": "Rich Aesthetics",
+    "target_files": ["frontend/src/index.css"],
+    "verification_method": "Manually test all views and resizing.",
+    "acceptance_criteria": [
+      "No overlapping elements on mobile",
+      "Smooth tab transitions",
+      "Consistent margin/padding across all views"
+    ],
+    "dependencies": ["LIST-01", "WEEK-01", "DASH-01"],
+    "blocked_by": null,
+    "tags": ["ui", "polish"],
+    "estimated_minutes": 30,
+    "actual_minutes": 20,
+    "created_at": "2026-05-03T15:07:30Z",
+    "updated_at": "2026-05-03T15:08:30Z"
+  }
+]

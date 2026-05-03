@@ -1,0 +1,33 @@
+name: aura-calendar
+
+services:
+  api:
+    build: ./backend
+    image: aura-calendar-api
+    container_name: aura-calendar-api
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  ui:
+    build: ./frontend
+    image: aura-calendar-ui
+    container_name: aura-calendar-ui
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_TARGET=http://api:8000
+    depends_on:
+      - api
