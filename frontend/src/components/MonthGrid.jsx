@@ -1,6 +1,6 @@
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-export default function MonthGrid({ month, today, allEvents = [], settings, onDayClick }) {
+export default function MonthGrid({ month, today, allEvents = [], settings, tagsConfig, onDayClick }) {
   const colorMap = settings?.color_map || {};
 
   return (
@@ -60,15 +60,27 @@ export default function MonthGrid({ month, today, allEvents = [], settings, onDa
               {week.days.map((day) => {
                 const isToday = day.date === today;
                 const isWeekend = day.day_of_week >= 5;
+                const hasSpecial = day.special;
+                
                 const cls = [
                   'day-cell',
                   !day.is_current_month && 'day-cell--outside',
                   isToday && 'day-cell--today',
                   isWeekend && 'day-cell--weekend',
+                  hasSpecial && 'day-cell--special',
                 ].filter(Boolean).join(' ');
 
+                let style = {};
+                if (hasSpecial && tagsConfig) {
+                  const primaryTag = tagsConfig.primary.find(t => day.special.tags.includes(t.id));
+                  if (primaryTag) {
+                    style.backgroundColor = primaryTag.color + '22'; // 13% opacity
+                    style.borderBottom = `3px solid ${primaryTag.color}`;
+                  }
+                }
+
                 return (
-                  <div className={cls} key={day.date} onClick={() => onDayClick(day)}>
+                  <div className={cls} key={day.date} onClick={() => onDayClick(day)} style={style}>
                     <span className="day-cell__number">{day.day}</span>
                   </div>
                 );

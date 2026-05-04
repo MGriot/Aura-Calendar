@@ -13,6 +13,7 @@ export default function Header({
     { id: 'month', label: 'Month' },
     { id: 'week', label: 'Week' },
     { id: 'events', label: 'Events' },
+    { id: 'special_days', label: 'Special Days' },
   ];
 
   return (

@@ -6,6 +6,7 @@ import DashboardView from './components/DashboardView.jsx';
 import WeekView from './components/WeekView.jsx';
 import EventListView from './components/EventListView.jsx';
 import DayDetailsModal from './components/DayDetailsModal.jsx';
+import SpecialDaysView from './components/SpecialDaysView.jsx';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -20,6 +21,7 @@ export default function App() {
   const [months, setMonths] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [tagsConfig, setTagsConfig] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
 
   // Apply theme to document
@@ -38,6 +40,7 @@ export default function App() {
       setMonths(data.months);
       setAllEvents(data.events || []);
       setSettings(data.settings);
+      setTagsConfig(data.tags_config);
     } catch (err) {
       console.error('Failed to fetch calendar:', err);
     } finally {
@@ -109,6 +112,7 @@ export default function App() {
                 today={TODAY} 
                 allEvents={allEvents}
                 settings={settings}
+                tagsConfig={tagsConfig}
                 onDayClick={(day) => setSelectedDay(day)}
               />
             ))}
@@ -121,6 +125,10 @@ export default function App() {
 
         {!loading && activeTab === 'events' && (
           <EventListView allEvents={allEvents} settings={settings} />
+        )}
+
+        {activeTab === 'special_days' && (
+          <SpecialDaysView settings={settings} />
         )}
       </main>
 

@@ -255,7 +255,7 @@
     "id": "SD-FRONT-01",
     "title": "Implement SpecialDaysView with 12-month grid",
     "description": "Create a new view for the 'Special Days' tab showing the full year.",
-    "status": "in_progress",
+    "status": "done",
     "priority": "medium",
     "linked_req": "Year View & Selection",
     "target_files": ["frontend/src/components/SpecialDaysView.jsx"],
@@ -266,13 +266,14 @@
       "Responsive design"
     ],
     "dependencies": ["NAV-01"],
-    "created_at": "2026-05-04T18:10:00Z"
+    "created_at": "2026-05-04T18:10:00Z",
+    "updated_at": "2026-05-04T18:23:45Z"
   },
   {
     "id": "SD-FRONT-02",
     "title": "Implement Day Selection and Action Panel",
     "description": "Add multi-select logic and panels for tag management and assignment.",
-    "status": "todo",
+    "status": "done",
     "priority": "medium",
     "linked_req": "Year View & Selection",
     "target_files": ["frontend/src/components/SpecialDaysView.jsx"],
@@ -283,13 +284,14 @@
       "Visual feedback for selected state"
     ],
     "dependencies": ["SD-FRONT-01", "SD-BACK-02"],
-    "created_at": "2026-05-04T18:10:00Z"
+    "created_at": "2026-05-04T18:10:00Z",
+    "updated_at": "2026-05-04T18:23:45Z"
   },
   {
     "id": "SD-FRONT-03",
     "title": "Integrate Special Days tab and Main View highlights",
     "description": "Add the tab to Header and update MonthGrid to show special day indicators.",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "linked_req": "Calendar Integration",
     "target_files": ["frontend/src/App.jsx", "frontend/src/components/Header.jsx", "frontend/src/components/MonthGrid.jsx"],
@@ -300,6 +302,7 @@
       "Colors match the tag configuration"
     ],
     "dependencies": ["SD-FRONT-02", "SD-BACK-03"],
-    "created_at": "2026-05-04T18:10:00Z"
+    "created_at": "2026-05-04T18:10:00Z",
+    "updated_at": "2026-05-04T18:23:45Z"
   }
 ]

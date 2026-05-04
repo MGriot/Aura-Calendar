@@ -9,8 +9,30 @@
   {
     "date": "2026-05-04",
     "tags": [
-      "special"
+      "holiday",
+      "bank_closure"
     ],
-    "where": "office"
+    "where": ""
+  },
+  {
+    "date": "2026-01-01",
+    "tags": [
+      "holiday"
+    ],
+    "where": ""
+  },
+  {
+    "date": "2026-01-02",
+    "tags": [
+      "holiday"
+    ],
+    "where": ""
+  },
+  {
+    "date": "2026-05-07",
+    "tags": [
+      "personal"
+    ],
+    "where": ""
   }
 ]
