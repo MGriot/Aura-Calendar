@@ -59,6 +59,29 @@ class Settings(BaseModel):
     reload_interval: int = 0 # in minutes, 0 = manual
 
 
+class TagConfigItem(BaseModel):
+    id: str
+    label: str
+    color: str
+
+
+class TagsConfig(BaseModel):
+    primary: list[TagConfigItem] = []
+    where: list[TagConfigItem] = []
+
+
+class SpecialDay(BaseModel):
+    date: str
+    tags: list[str] = []
+    where: str = ""
+
+
+class AssignRequest(BaseModel):
+    dates: list[str]
+    tags: list[str] = []
+    where: str = ""
+
+
 # ── Settings persistence ──────────────────────────────────
 def load_settings() -> Settings:
     if os.path.exists(SETTINGS_FILE):
@@ -70,6 +93,35 @@ def load_settings() -> Settings:
 def save_settings_to_disk(settings: Settings):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings.model_dump(), f, indent=2)
+
+
+TAGS_FILE = os.path.join(os.path.dirname(__file__), "tags_config.json")
+SPECIAL_DAYS_FILE = os.path.join(os.path.dirname(__file__), "special_days.json")
+
+
+def load_tags_config() -> TagsConfig:
+    if os.path.exists(TAGS_FILE):
+        with open(TAGS_FILE, "r") as f:
+            return TagsConfig(**json.load(f))
+    return TagsConfig()
+
+
+def save_tags_config(config: TagsConfig):
+    with open(TAGS_FILE, "w") as f:
+        json.dump(config.model_dump(), f, indent=2)
+
+
+def load_special_days() -> list[SpecialDay]:
+    if os.path.exists(SPECIAL_DAYS_FILE):
+        with open(SPECIAL_DAYS_FILE, "r") as f:
+            data = json.load(f)
+            return [SpecialDay(**d) for d in data]
+    return []
+
+
+def save_special_days(days: list[SpecialDay]):
+    with open(SPECIAL_DAYS_FILE, "w") as f:
+        json.dump([d.model_dump() for d in days], f, indent=2)
 
 
 # ── CSV event loader ──────────────────────────────────────
@@ -291,3 +343,37 @@ def get_all_events():
     # Sort by start_date
     events.sort(key=lambda x: x["start_date"])
     return {"events": events}
+
+
+@app.get("/api/tags")
+def get_tags():
+    return load_tags_config()
+
+
+@app.post("/api/tags")
+def update_tags(config: TagsConfig):
+    save_tags_config(config)
+    return {"status": "ok", "config": config}
+
+
+@app.get("/api/special-days")
+def get_all_special_days():
+    return load_special_days()
+
+
+@app.post("/api/special-days/assign")
+def assign_special_days(req: AssignRequest):
+    current_days = load_special_days()
+    days_map = {d.date: d for d in current_days}
+    
+    for date_str in req.dates:
+        if date_str in days_map:
+            days_map[date_str].tags = req.tags
+            days_map[date_str].where = req.where
+        else:
+            days_map[date_str] = SpecialDay(date=date_str, tags=req.tags, where=req.where)
+            
+    # Remove entries with no tags and no 'where'
+    final_days = [d for d in days_map.values() if d.tags or d.where]
+    save_special_days(final_days)
+    return {"status": "ok", "count": len(req.dates)}

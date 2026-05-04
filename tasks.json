@@ -219,7 +219,7 @@
     "id": "SD-BACK-02",
     "title": "Implement API endpoints for Special Days and Tags",
     "description": "Add CRUD endpoints for special days and tags in main.py.",
-    "status": "in_progress",
+    "status": "done",
     "priority": "high",
     "linked_req": "Twin Calendar DB",
     "target_files": ["backend/main.py"],
@@ -231,13 +231,14 @@
       "POST /api/tags updates tag config"
     ],
     "dependencies": ["SD-BACK-01"],
-    "created_at": "2026-05-04T18:10:00Z"
+    "created_at": "2026-05-04T18:10:00Z",
+    "updated_at": "2026-05-04T18:16:18Z"
   },
   {
     "id": "SD-BACK-03",
     "title": "Merge Special Days into Calendar API",
     "description": "Update /api/calendar to include special days in each day object.",
-    "status": "todo",
+    "status": "in_progress",
     "priority": "high",
     "linked_req": "Calendar Integration",
     "target_files": ["backend/main.py"],
