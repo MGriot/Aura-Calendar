@@ -73,13 +73,13 @@ class TagsConfig(BaseModel):
 class SpecialDay(BaseModel):
     date: str
     tags: list[str] = []
-    where: str = ""
+    where: list[str] = []
 
 
 class AssignRequest(BaseModel):
     dates: list[str]
     tags: list[str] = []
-    where: str = ""
+    where: list[str] = []
 
 
 # ── Settings persistence ──────────────────────────────────
