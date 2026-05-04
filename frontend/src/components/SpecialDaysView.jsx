@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Trash2, Plus, Check, X } from 'lucide-react';
+import { Save, Trash2, Plus, Minus, Check, X } from 'lucide-react';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
@@ -114,9 +114,9 @@ export default function SpecialDaysView({ settings }) {
         <div className="header__left">
           <h2 className="special-days-view__title">Annual Tagging View</h2>
           <div className="year-nav">
-            <button className="nav-btn" onClick={() => setViewYear(v => v - 1)}><X size={16} style={{transform: 'rotate(90deg)'}} /></button>
+            <button className="nav-btn" onClick={() => setViewYear(v => v - 1)}><Minus size={16} /></button>
             <span className="year-display">{viewYear}</span>
-            <button className="nav-btn" onClick={() => setViewYear(v => v + 1)}><Plus size={16} style={{transform: 'rotate(45deg)'}} /></button>
+            <button className="nav-btn" onClick={() => setViewYear(v => v + 1)}><Plus size={16} /></button>
           </div>
         </div>
       </header>

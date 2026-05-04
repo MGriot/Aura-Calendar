@@ -36,25 +36,27 @@ export default function Header({
         ))}
       </div>
 
-      <nav className="header__nav" aria-label="Month navigation">
-        <button
-          className="nav-btn"
-          onClick={onPrev}
-          aria-label="Previous 4 months"
-          id="nav-prev"
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <span className="header__range">{rangeLabel}</span>
-        <button
-          className="nav-btn"
-          onClick={onNext}
-          aria-label="Next 4 months"
-          id="nav-next"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </nav>
+      {activeTab !== 'special_days' && (
+        <nav className="header__nav" aria-label="Month navigation">
+          <button
+            className="nav-btn"
+            onClick={onPrev}
+            aria-label="Previous 4 months"
+            id="nav-prev"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="header__range">{rangeLabel}</span>
+          <button
+            className="nav-btn"
+            onClick={onNext}
+            aria-label="Next 4 months"
+            id="nav-next"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </nav>
+      )}
 
       <button
         className="settings-btn"
