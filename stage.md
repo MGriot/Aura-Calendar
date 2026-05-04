@@ -1,6 +1,6 @@
 # Stage · Current Execution Snapshot
 
-**Last Sync:** 2026-05-04 at 20:23:45
+**Last Sync:** 2026-05-04 at 21:38:00
 
 ---
 
@@ -13,11 +13,11 @@
 
 | Field | Value |
 |---|---|
-| **Task ID** | `SD-COMPLETE` |
-| **Title** | Feature Implementation Finalized |
+| **Task ID** | `SD-UI-REFINE` |
+| **Title** | UI Refinement and Year Navigation |
 | **Status** | done |
-| **Target** | `Entire Repository` |
-| **Verify** | `Full manual walkthrough completed.` |
+| **Target** | `SpecialDaysView.jsx`, `index.css` |
+| **Verify** | `Visual verification via screenshot.` |
 
 ---
 
@@ -32,10 +32,10 @@
 
 | Task ID | Title | Completed At | Verdict |
 |---|---|---|---|
+| SD-FRONT-04 | Refine Special Days UI and Year Navigation | 2026-05-04 21:38:00 | PASSED ✅ |
 | SD-FRONT-03 | Integrate Special Days tab and Main View highlights | 2026-05-04 20:23:45 | PASSED ✅ |
 | SD-FRONT-02 | Implement Day Selection and Action Panel | 2026-05-04 20:23:45 | PASSED ✅ |
 | SD-FRONT-01 | Implement SpecialDaysView with 12-month grid | 2026-05-04 20:23:45 | PASSED ✅ |
-| SD-BACK-03 | Merge Special Days into Calendar API | 2026-05-04 20:17:28 | PASSED ✅ |
 
 ---
 

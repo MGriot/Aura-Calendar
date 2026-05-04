@@ -297,12 +297,30 @@
     "target_files": ["frontend/src/App.jsx", "frontend/src/components/Header.jsx", "frontend/src/components/MonthGrid.jsx"],
     "verification_method": "Check if special days show up in the 4-month view with correct colors.",
     "acceptance_criteria": [
-      "'Special Days' tab works",
+      "Special Days tab is reachable",
       "MonthGrid displays indicators (dots or background) for special days",
       "Colors match the tag configuration"
     ],
     "dependencies": ["SD-FRONT-02", "SD-BACK-03"],
     "created_at": "2026-05-04T18:10:00Z",
     "updated_at": "2026-05-04T18:23:45Z"
+  },
+  {
+    "id": "SD-FRONT-04",
+    "title": "Refine Special Days UI and Year Navigation",
+    "description": "Implement independent year switching and polish Tag Management UI.",
+    "status": "done",
+    "priority": "medium",
+    "linked_req": "UI Refinement",
+    "target_files": ["frontend/src/components/SpecialDaysView.jsx", "frontend/src/index.css"],
+    "verification_method": "Verify year switching works independently and Tag UI matches the provided design requirements.",
+    "acceptance_criteria": [
+      "Independent year navigation in Special Days view",
+      "Polished Tag Management UI with trash icons and colored dots",
+      "Consistent design system application"
+    ],
+    "dependencies": ["SD-FRONT-03"],
+    "created_at": "2026-05-04T19:35:00Z",
+    "updated_at": "2026-05-04T19:38:00Z"
   }
 ]

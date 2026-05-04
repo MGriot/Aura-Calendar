@@ -9,6 +9,7 @@ export default function SpecialDaysView({ settings }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [tagsConfig, setTagsConfig] = useState(null);
   const [specialDays, setSpecialDays] = useState([]);
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
   
   // Selection state
   const [formTags, setFormTags] = useState([]);
@@ -17,8 +18,7 @@ export default function SpecialDaysView({ settings }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const currentYear = new Date().getFullYear();
-      const res = await fetch(`/api/calendar?start_month=1&start_year=${currentYear}&num_months=12`);
+      const res = await fetch(`/api/calendar?start_month=1&start_year=${viewYear}&num_months=12`);
       const data = await res.json();
       setYearData(data.months);
       setTagsConfig(data.tags_config);
@@ -32,7 +32,7 @@ export default function SpecialDaysView({ settings }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [viewYear]);
 
   const toggleDate = (date) => {
     setSelectedDates(prev => 
@@ -110,12 +110,23 @@ export default function SpecialDaysView({ settings }) {
 
   return (
     <div className="special-days-view">
+      <header className="special-days-view__header">
+        <div className="header__left">
+          <h2 className="special-days-view__title">Annual Tagging View</h2>
+          <div className="year-nav">
+            <button className="nav-btn" onClick={() => setViewYear(v => v - 1)}><X size={16} style={{transform: 'rotate(90deg)'}} /></button>
+            <span className="year-display">{viewYear}</span>
+            <button className="nav-btn" onClick={() => setViewYear(v => v + 1)}><Plus size={16} style={{transform: 'rotate(45deg)'}} /></button>
+          </div>
+        </div>
+      </header>
+
       <div className="special-days-layout">
         <div className="year-grid">
           {yearData?.map((month) => (
             <div key={`${month.year}-${month.month}`} className="mini-month">
               <div className="mini-month__header">
-                {month.month_name} {month.year}
+                {month.month_name}
               </div>
               <div className="mini-month__days">
                 {WEEKDAYS.map(d => <div key={d} className="mini-day-header">{d}</div>)}
@@ -150,59 +161,70 @@ export default function SpecialDaysView({ settings }) {
         </div>
 
         <div className="special-days-sidebar">
-          <h3>Tag Assignment</h3>
-          <p>{selectedDates.length} days selected</p>
-          
-          <div className="form-section">
-            <label>Primary Tags</label>
-            <div className="tag-chips">
-              {tagsConfig?.primary.map(tag => (
-                <button 
-                  key={tag.id}
-                  className={`tag-chip ${formTags.includes(tag.id) ? 'tag-chip--active' : ''}`}
-                  onClick={() => setFormTags(prev => 
-                    prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id]
-                  )}
-                  style={{ '--tag-color': tag.color }}
-                >
-                  {tag.label}
-                </button>
-              ))}
+          <div className="sidebar-section">
+            <h3 className="sidebar-title">Tag Assignment</h3>
+            <p className="sidebar-subtitle">{selectedDates.length} days selected</p>
+            
+            <div className="form-section">
+              <label>Primary Tags</label>
+              <div className="tag-chips">
+                {tagsConfig?.primary.map(tag => (
+                  <button 
+                    key={tag.id}
+                    className={`tag-chip ${formTags.includes(tag.id) ? 'tag-chip--active' : ''}`}
+                    onClick={() => setFormTags(prev => 
+                      prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id]
+                    )}
+                    style={{ '--tag-color': tag.color }}
+                  >
+                    {tag.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="form-section">
-            <label>Location (Where)</label>
-            <select value={formWhere} onChange={(e) => setFormWhere(e.target.value)}>
-              <option value="">None</option>
-              {tagsConfig?.where.map(tag => (
-                <option key={tag.id} value={tag.id}>{tag.label}</option>
-              ))}
-            </select>
-          </div>
+            <div className="form-section">
+              <label>Location (Where)</label>
+              <select className="field__select" value={formWhere} onChange={(e) => setFormWhere(e.target.value)}>
+                <option value="">None</option>
+                {tagsConfig?.where.map(tag => (
+                  <option key={tag.id} value={tag.id}>{tag.label}</option>
+                ))}
+              </select>
+            </div>
 
-          <button className="btn btn--primary" onClick={handleAssign} disabled={selectedDates.length === 0}>
-            Apply Tags
-          </button>
+            <button className="btn btn--primary" onClick={handleAssign} disabled={selectedDates.length === 0} style={{ width: '100%' }}>
+              <Save size={16} /> Apply Tags
+            </button>
+          </div>
 
           <hr className="divider" />
 
           <div className="tag-management">
-            <h3>Manage Tags</h3>
+            <h3 className="sidebar-title">Manage Taxonomy</h3>
+            
             <div className="form-section">
               <label>Primary Categories</label>
               <div className="tag-list-edit">
                 {tagsConfig?.primary.map(tag => (
                   <div key={tag.id} className="tag-edit-item">
-                    <div className="tag-dot" style={{ backgroundColor: tag.color }} />
-                    <span>{tag.label}</span>
-                    <button className="icon-btn" onClick={() => removeTag('primary', tag.id)}><Trash2 size={14} /></button>
+                    <div className="tag-edit-item__info">
+                      <div className="tag-dot" style={{ backgroundColor: tag.color }} />
+                      <span className="tag-label">{tag.label}</span>
+                    </div>
+                    <button className="icon-btn icon-btn--danger" onClick={() => removeTag('primary', tag.id)}>
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 ))}
                 <div className="tag-add-row">
-                  <input type="text" placeholder="New tag..." id="new-primary-label" />
-                  <input type="color" id="new-primary-color" defaultValue="#3b82f6" />
-                  <button className="icon-btn" onClick={() => addTag('primary')}><Plus size={16} /></button>
+                  <div className="tag-add-inputs">
+                    <input type="text" className="field__input" placeholder="New tag..." id="new-primary-label" />
+                    <input type="color" className="color-picker-input" id="new-primary-color" defaultValue="#3b82f6" />
+                  </div>
+                  <button className="icon-btn icon-btn--primary" onClick={() => addTag('primary')}>
+                    <Plus size={16} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -212,15 +234,23 @@ export default function SpecialDaysView({ settings }) {
               <div className="tag-list-edit">
                 {tagsConfig?.where.map(tag => (
                   <div key={tag.id} className="tag-edit-item">
-                    <div className="tag-dot" style={{ backgroundColor: tag.color }} />
-                    <span>{tag.label}</span>
-                    <button className="icon-btn" onClick={() => removeTag('where', tag.id)}><Trash2 size={14} /></button>
+                    <div className="tag-edit-item__info">
+                      <div className="tag-dot" style={{ backgroundColor: tag.color }} />
+                      <span className="tag-label">{tag.label}</span>
+                    </div>
+                    <button className="icon-btn icon-btn--danger" onClick={() => removeTag('where', tag.id)}>
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 ))}
                 <div className="tag-add-row">
-                  <input type="text" placeholder="New location..." id="new-where-label" />
-                  <input type="color" id="new-where-color" defaultValue="#64748b" />
-                  <button className="icon-btn" onClick={() => addTag('where')}><Plus size={16} /></button>
+                  <div className="tag-add-inputs">
+                    <input type="text" className="field__input" placeholder="New location..." id="new-where-label" />
+                    <input type="color" className="color-picker-input" id="new-where-color" defaultValue="#64748b" />
+                  </div>
+                  <button className="icon-btn icon-btn--primary" onClick={() => addTag('where')}>
+                    <Plus size={16} />
+                  </button>
                 </div>
               </div>
             </div>
