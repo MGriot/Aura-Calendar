@@ -232,6 +232,9 @@ def get_calendar(
 
     settings = load_settings()
     events = load_events_from_csv(settings)
+    
+    special_days = load_special_days()
+    tags_config = load_tags_config()
 
     # Index events by date for O(1) lookup
     by_date: dict[str, list] = {}
@@ -248,13 +251,25 @@ def get_calendar(
                 }
             )
             cur += datetime.timedelta(days=1)
+            
+    # Index special days by date
+    special_by_date = {d.date: d for d in special_days}
 
     for month in data:
         for week in month["weeks"]:
             for day in week["days"]:
                 day["events"] = by_date.get(day["date"], [])
+                sd = special_by_date.get(day["date"])
+                if sd:
+                    day["special"] = sd.model_dump()
 
-    return {"months": data, "events": events, "settings": settings}
+    return {
+        "months": data, 
+        "events": events, 
+        "settings": settings, 
+        "special_days": special_days,
+        "tags_config": tags_config
+    }
 
 
 @app.get("/api/settings")

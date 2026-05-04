@@ -5,5 +5,12 @@
       "holiday"
     ],
     "where": "remote"
+  },
+  {
+    "date": "2026-05-04",
+    "tags": [
+      "special"
+    ],
+    "where": "office"
   }
 ]
