@@ -1,11 +1,11 @@
 # Stage · Current Execution Snapshot
 
-**Last Sync:** 2026-05-03 at 15:08:30
+**Last Sync:** 2026-05-04 at 20:13:11
 
 ---
 
 ## 🚦 Quality Gate
-> Status: **COMPLETE** ✅
+> Status: **COMPLETE** ✅ (SD-BACK-01) | Next: **IMPLEMENTING** ⚙️ (SD-BACK-02)
 
 ---
 
@@ -13,17 +13,19 @@
 
 | Field | Value |
 |---|---|
-| **Task ID** | `COMPLETE` |
-| **Title** | Aura Calendar Evolution Finished |
-| **Status** | ALL TASKS DONE ✅ |
-| **Final Sync** | 15:08:30 |
+| **Task ID** | `SD-BACK-02` |
+| **Title** | Implement API endpoints for Special Days and Tags |
+| **Status** | in_progress |
+| **Target** | `backend/main.py` |
+| **Verify** | `Use curl or browser to test GET/POST /api/special-days and /api/tags.` |
 
 ---
 
 ## ⏭️ On Deck
 
-1. `ENHANCEMENT-01` · User Feedback and Iteration
-2. `EXPORT-01` · Implement PDF/Image export of calendar views
+1. `SD-BACK-03` · Merge Special Days into Calendar API
+2. `SD-FRONT-01` · Implement SpecialDaysView with 12-month grid
+3. `SD-FRONT-02` · Implement Day Selection and Action Panel
 
 ---
 
@@ -31,15 +33,8 @@
 
 | Task ID | Title | Completed At | Verdict |
 |---|---|---|---|
-| CLEANUP-01 | Final UI polish and responsive check | 15:08:30 | PASSED ✅ |
-| LIST-01 | Implement EventListView (Nearest Events) | 15:07:30 | PASSED ✅ |
-| WEEK-01 | Implement WeekView with horizontal timeline | 15:06:30 | PASSED ✅ |
-| DASH-02 | Implement 'Next Event' countdown logic | 15:05:30 | PASSED ✅ |
-| DASH-01 | Create DashboardView with basic stat cards | 15:04:30 | PASSED ✅ |
-| SET-02 | Add File Dropzone and External URL | 15:03:30 | PASSED ✅ |
-| SET-01 | Update SettingsModal with Theme Toggle | 15:02:30 | PASSED ✅ |
-| NAV-01 | Implement Top Tab Navigation | 15:01:30 | PASSED ✅ |
-| INFRA-01 | Set up CSS variables and Theme Engine | 15:00:30 | PASSED ✅ |
+| SD-BACK-01 | Create storage for special days and tags | 2026-05-04 20:13:11 | PASSED ✅ |
+| CLEANUP-01 | Final UI polish and responsive check | 2026-05-03 15:08:30 | PASSED ✅ |
 
 ---
 

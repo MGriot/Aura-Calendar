@@ -1,0 +1,14 @@
+{
+  "primary": [
+    { "id": "holiday", "label": "Holiday", "color": "#ef4444" },
+    { "id": "bank_closure", "label": "Bank Closure", "color": "#f59e0b" },
+    { "id": "personal", "label": "Personal", "color": "#8b5cf6" },
+    { "id": "special", "label": "Special", "color": "#3b82f6" }
+  ],
+  "where": [
+    { "id": "office", "label": "Office", "color": "#64748b" },
+    { "id": "remote", "label": "Remote", "color": "#10b981" },
+    { "id": "milan", "label": "Milan", "color": "#ec4899" },
+    { "id": "rome", "label": "Rome", "color": "#06b6d4" }
+  ]
+}

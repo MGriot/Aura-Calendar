@@ -196,5 +196,108 @@
     "actual_minutes": 20,
     "created_at": "2026-05-03T15:07:30Z",
     "updated_at": "2026-05-03T15:08:30Z"
+  },
+  {
+    "id": "SD-BACK-01",
+    "title": "Create storage for special days and tags",
+    "description": "Initialize special_days.json and tags_config.json in the backend directory.",
+    "status": "done",
+    "priority": "high",
+    "linked_req": "Twin Calendar DB",
+    "target_files": ["backend/special_days.json", "backend/tags_config.json"],
+    "verification_method": "Check if files exist and have valid JSON structure.",
+    "acceptance_criteria": [
+      "special_days.json initialized as empty array",
+      "tags_config.json initialized with default primary and 'where' tags",
+      "Files are in a persistent directory"
+    ],
+    "dependencies": [],
+    "created_at": "2026-05-04T18:10:00Z",
+    "updated_at": "2026-05-04T18:13:11Z"
+  },
+  {
+    "id": "SD-BACK-02",
+    "title": "Implement API endpoints for Special Days and Tags",
+    "description": "Add CRUD endpoints for special days and tags in main.py.",
+    "status": "in_progress",
+    "priority": "high",
+    "linked_req": "Twin Calendar DB",
+    "target_files": ["backend/main.py"],
+    "verification_method": "Use curl or browser to test GET/POST /api/special-days and /api/tags.",
+    "acceptance_criteria": [
+      "GET /api/special-days returns all special days",
+      "POST /api/special-days/assign bulk assigns tags to dates",
+      "GET /api/tags returns tag config",
+      "POST /api/tags updates tag config"
+    ],
+    "dependencies": ["SD-BACK-01"],
+    "created_at": "2026-05-04T18:10:00Z"
+  },
+  {
+    "id": "SD-BACK-03",
+    "title": "Merge Special Days into Calendar API",
+    "description": "Update /api/calendar to include special days in each day object.",
+    "status": "todo",
+    "priority": "high",
+    "linked_req": "Calendar Integration",
+    "target_files": ["backend/main.py"],
+    "verification_method": "Verify /api/calendar response contains 'special_days' field for tagged dates.",
+    "acceptance_criteria": [
+      "Each day in /api/calendar response can contain special_days metadata",
+      "Special days are correctly indexed by date"
+    ],
+    "dependencies": ["SD-BACK-02"],
+    "created_at": "2026-05-04T18:10:00Z"
+  },
+  {
+    "id": "SD-FRONT-01",
+    "title": "Implement SpecialDaysView with 12-month grid",
+    "description": "Create a new view for the 'Special Days' tab showing the full year.",
+    "status": "todo",
+    "priority": "medium",
+    "linked_req": "Year View & Selection",
+    "target_files": ["frontend/src/components/SpecialDaysView.jsx"],
+    "verification_method": "Manually check if the 12-month grid renders correctly.",
+    "acceptance_criteria": [
+      "12-month grid layout (3x4 or 4x3)",
+      "Correct dates and month names",
+      "Responsive design"
+    ],
+    "dependencies": ["NAV-01"],
+    "created_at": "2026-05-04T18:10:00Z"
+  },
+  {
+    "id": "SD-FRONT-02",
+    "title": "Implement Day Selection and Action Panel",
+    "description": "Add multi-select logic and panels for tag management and assignment.",
+    "status": "todo",
+    "priority": "medium",
+    "linked_req": "Year View & Selection",
+    "target_files": ["frontend/src/components/SpecialDaysView.jsx"],
+    "verification_method": "Select multiple days and verify they are highlighted.",
+    "acceptance_criteria": [
+      "Click to toggle day selection",
+      "Batch-assign tags to all selected days via a sidebar or floating panel",
+      "Visual feedback for selected state"
+    ],
+    "dependencies": ["SD-FRONT-01", "SD-BACK-02"],
+    "created_at": "2026-05-04T18:10:00Z"
+  },
+  {
+    "id": "SD-FRONT-03",
+    "title": "Integrate Special Days tab and Main View highlights",
+    "description": "Add the tab to Header and update MonthGrid to show special day indicators.",
+    "status": "todo",
+    "priority": "high",
+    "linked_req": "Calendar Integration",
+    "target_files": ["frontend/src/App.jsx", "frontend/src/components/Header.jsx", "frontend/src/components/MonthGrid.jsx"],
+    "verification_method": "Check if special days show up in the 4-month view with correct colors.",
+    "acceptance_criteria": [
+      "'Special Days' tab works",
+      "MonthGrid displays indicators (dots or background) for special days",
+      "Colors match the tag configuration"
+    ],
+    "dependencies": ["SD-FRONT-02", "SD-BACK-03"],
+    "created_at": "2026-05-04T18:10:00Z"
   }
 ]
