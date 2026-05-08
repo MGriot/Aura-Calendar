@@ -1065,6 +1065,16 @@ body {
   z-index: 10;
 }
 
+/* ── Special Days & Advanced Metadata Markers ─────────── */
+.day-cell--special {
+  /* base style — override via inline style from primaryTag */
+  border-bottom-width: 3px;
+  border-bottom-style: solid;
+  border-bottom-color: var(--accent-blue); /* fallback; real color set inline */
+}
+
+/* .adv-dot is defined below with the Week View styles */
+
 /* ── Day Details Modal ──────────────────────────────────── */
 .modal--day-details {
   width: min(500px, 94vw);
@@ -1584,6 +1594,9 @@ body {
   flex-direction: column;
   gap: 24px;
   box-shadow: var(--shadow);
+  overflow-y: auto;
+  max-height: 100%;
+  scrollbar-width: thin;
 }
 
 .form-section {
@@ -1846,4 +1859,151 @@ body {
   border: none;
   border-top: 1px solid var(--border);
   margin: 8px 0;
+}
+
+/* Advanced Metadata Styling */
+.advanced-metadata-panel {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid var(--border);
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 12px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-item__label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.meta-item__value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.holiday-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.holiday-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.holiday-badge__country {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: var(--accent-blue);
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.holiday-badge__name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meta-tag {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.meta-tag--loc {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.section-divider {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 24px;
+}
+
+.adv-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--accent-purple);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(167, 139, 250, 0.7);
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* Week View Advanced Metadata */
+.week-day__adv {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--accent-blue);
+  background: var(--accent-blue-dim);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.week-day__footer {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.season-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.holiday-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-red);
+  padding: 1px 4px;
+  border-radius: 2px;
 }

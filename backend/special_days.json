@@ -1,6 +1,9 @@
 [
   {
     "date": "2026-12-25",
+    "month": null,
+    "day": null,
+    "is_recurring": false,
     "tags": [
       "holiday"
     ],
@@ -10,6 +13,9 @@
   },
   {
     "date": "2026-05-04",
+    "month": null,
+    "day": null,
+    "is_recurring": false,
     "tags": [
       "holiday",
       "bank_closure"
@@ -17,21 +23,10 @@
     "where": []
   },
   {
-    "date": "2026-01-01",
-    "tags": [
-      "holiday"
-    ],
-    "where": []
-  },
-  {
-    "date": "2026-01-02",
-    "tags": [
-      "holiday"
-    ],
-    "where": []
-  },
-  {
     "date": "2026-05-07",
+    "month": null,
+    "day": null,
+    "is_recurring": false,
     "tags": [
       "personal"
     ],
@@ -39,12 +34,25 @@
   },
   {
     "date": "2026-01-05",
+    "month": null,
+    "day": null,
+    "is_recurring": false,
     "tags": [
       "personal"
     ],
     "where": [
       "office",
       "milan"
+    ]
+  },
+  {
+    "date": "2026-05-06",
+    "month": null,
+    "day": null,
+    "is_recurring": false,
+    "tags": [],
+    "where": [
+      "remote"
     ]
   }
 ]

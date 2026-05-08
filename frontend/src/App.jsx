@@ -12,17 +12,22 @@ const TODAY = new Date().toISOString().split('T')[0];
 
 export default function App() {
   const now = new Date();
-  const [startMonth, setStartMonth] = useState(now.getMonth() + 1);
-  const [startYear, setStartYear] = useState(now.getFullYear());
+  const [startMonth, setStartMonth] = useState(() => Number(sessionStorage.getItem('aura-month')) || now.getMonth() + 1);
+  const [startYear, setStartYear] = useState(() => Number(sessionStorage.getItem('aura-year')) || now.getFullYear());
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('aura-theme') || 'dark');
-  const [activeTab, setActiveTab] = useState('month');
+  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('aura-tab') || 'month');
   const [months, setMonths] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
   const [settings, setSettings] = useState(null);
   const [tagsConfig, setTagsConfig] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
+
+  // Persist state to prevent resets
+  useEffect(() => { sessionStorage.setItem('aura-month', startMonth); }, [startMonth]);
+  useEffect(() => { sessionStorage.setItem('aura-year', startYear); }, [startYear]);
+  useEffect(() => { sessionStorage.setItem('aura-tab', activeTab); }, [activeTab]);
 
   // Apply theme to document
   useEffect(() => {
@@ -39,7 +44,14 @@ export default function App() {
       const data = await res.json();
       setMonths(data.months);
       setAllEvents(data.events || []);
-      setSettings(data.settings);
+      
+      // Ensure all requested components are enabled if missing
+      const updatedSettings = { ...data.settings };
+      if (updatedSettings && !updatedSettings.enabled_cultural_calendars) {
+        updatedSettings.enabled_cultural_calendars = ['holidays', 'chinese', 'catholic'];
+      }
+      
+      setSettings(updatedSettings);
       setTagsConfig(data.tags_config);
     } catch (err) {
       console.error('Failed to fetch calendar:', err);
@@ -120,7 +132,13 @@ export default function App() {
         )}
 
         {!loading && activeTab === 'week' && (
-          <WeekView />
+          <WeekView 
+            onDayClick={(day) => setSelectedDay(day)} 
+            startYear={startYear}
+            startMonth={startMonth}
+            settings={settings}
+            tagsConfig={tagsConfig}
+          />
         )}
 
         {!loading && activeTab === 'events' && (
@@ -146,8 +164,8 @@ export default function App() {
 
       {selectedDay && (
         <DayDetailsModal 
-          date={selectedDay.date}
-          events={selectedDay.events || []}
+          day={selectedDay}
+          tagsConfig={tagsConfig}
           onClose={() => setSelectedDay(null)}
           colorMap={settings?.color_map}
         />

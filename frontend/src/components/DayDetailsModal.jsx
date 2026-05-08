@@ -1,6 +1,16 @@
 import { X, Calendar as CalendarIcon, MapPin, Tag, CheckCircle } from 'lucide-react';
 
-export default function DayDetailsModal({ date, events, onClose, colorMap }) {
+export default function DayDetailsModal({ 
+  day, tagsConfig, onClose, colorMap 
+}) {
+  if (!day) return null;
+  const { date, events = [], advanced, special_tags: specialTags, where: locations } = day;
+  
+  // Use unified metadata if available, or fallback to day fields
+  const fiscalMonth = day.fiscal_month || advanced?.fiscal_month;
+  const fiscalWeek = day.week_of_month || advanced?.fiscal_week;
+  const season = day.season || advanced?.season;
+
   const formattedDate = new Date(date).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -16,7 +26,6 @@ export default function DayDetailsModal({ date, events, onClose, colorMap }) {
             <CalendarIcon size={20} />
             <div>
               <h2>{formattedDate}</h2>
-              <p className="modal__subtitle">{events.length} {events.length === 1 ? 'event' : 'events'} scheduled</p>
             </div>
           </div>
           <button className="modal__close" onClick={onClose}>
@@ -25,6 +34,56 @@ export default function DayDetailsModal({ date, events, onClose, colorMap }) {
         </div>
 
         <div className="modal__body">
+          {/* Metadata Section */}
+          {((specialTags?.length > 0) || (day?.tier3?.cultural && day.tier3.cultural.length > 0)) && (
+            <div className="advanced-metadata-panel">
+              {/* Unified Cultural Data */}
+              {day?.tier3?.cultural && day.tier3.cultural.length > 0 && (
+                <div className="cultural-metadata" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {day.tier3.cultural.map((c, i) => (
+                    <div key={i} style={{ 
+                      fontSize: '0.7rem', 
+                      padding: '4px 8px', 
+                      borderRadius: '12px', 
+                      backgroundColor: '#f0f4f8',
+                      color: '#4a5568',
+                      border: '1px solid #e2e8f0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      {c.type === 'holiday' ? '🎉' : '🌍'} {c.name} {c.country ? `(${c.country})` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {specialTags?.length > 0 && tagsConfig && (
+                <div className="tags-row" style={{ marginTop: day?.tier3?.cultural?.length > 0 ? '12px' : '0' }}>
+                  {specialTags.map(tagId => {
+                    const tag = tagsConfig.primary.find(t => t.id === tagId);
+                    if (!tag) return null;
+                    return (
+                      <span key={tagId} className="meta-tag" style={{ backgroundColor: tag.color + '20', color: tag.color, borderColor: tag.color }}>
+                        {tag.label}
+                      </span>
+                    );
+                  })}
+                  {locations?.map(locId => {
+                    const loc = tagsConfig.where.find(t => t.id === locId);
+                    if (!loc) return null;
+                    return (
+                      <span key={locId} className="meta-tag meta-tag--loc">
+                        <MapPin size={10} /> {loc.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="section-divider" />
           {events.length === 0 ? (
             <div className="empty-state">
               <p>No events scheduled for this day.</p>

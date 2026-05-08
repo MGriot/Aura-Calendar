@@ -60,7 +60,9 @@ export default function MonthGrid({ month, today, allEvents = [], settings, tags
               {week.days.map((day) => {
                 const isToday = day.date === today;
                 const isWeekend = day.day_of_week >= 5;
-                const hasSpecial = day.special;
+                const showSpecial = settings?.show_special_days ?? true;
+                const hasSpecial = showSpecial && day.special_tags?.length > 0;
+                const hasAdvanced = !!day.advanced;
                 
                 const cls = [
                   'day-cell',
@@ -71,17 +73,70 @@ export default function MonthGrid({ month, today, allEvents = [], settings, tags
                 ].filter(Boolean).join(' ');
 
                 let style = {};
+                let primaryTag = null;
                 if (hasSpecial && tagsConfig) {
-                  const primaryTag = tagsConfig.primary.find(t => day.special.tags.includes(t.id));
+                  primaryTag = tagsConfig.primary.find(t => day.special_tags?.includes(t.id));
                   if (primaryTag) {
                     style.backgroundColor = primaryTag.color + '22'; // 13% opacity
                     style.borderBottom = `3px solid ${primaryTag.color}`;
                   }
                 }
 
+                // Apply holiday/cultural colors
+                const holidays = day.tier3?.cultural || [];
+                if (holidays.length > 0) {
+                  const mainHol = holidays[0];
+                  // If no user-cast tag, use holiday color for background (slightly stronger: 25% = 40 hex)
+                  if (!primaryTag) {
+                    style.backgroundColor = mainHol.color + '40';
+                  }
+                  // Stronger left border
+                  style.borderLeft = `4px solid ${mainHol.color}`;
+                }
+
                 return (
                   <div className={cls} key={day.date} onClick={() => onDayClick(day)} style={style}>
-                    <span className="day-cell__number">{day.day}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <span className="day-cell__number">{day.day}</span>
+                      {primaryTag && (
+                        <span style={{ 
+                          fontSize: '0.6rem', 
+                          fontWeight: 700, 
+                          color: primaryTag.color, 
+                          textTransform: 'uppercase',
+                          marginRight: hasAdvanced ? '12px' : '0' 
+                        }}>
+                          {primaryTag.label}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Tier 3: Cultural info */}
+                    {day.tier3?.cultural && day.tier3.cultural.length > 0 && (
+                      <div className="tier3-info" style={{ 
+                        fontSize: '0.58rem', 
+                        fontWeight: 600,
+                        marginTop: '4px',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}>
+                        {day.tier3.cultural.map((c, i) => (
+                          <div key={i} title={c.name} style={{ 
+                            color: c.color, 
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                            overflow: 'hidden',
+                            background: 'rgba(255,255,255,0.05)',
+                            padding: '1px 3px',
+                            borderRadius: '2px'
+                          }}>
+                            {c.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -5,11 +5,29 @@ import csv
 import datetime
 import json
 import os
+import sys
+import shutil
+
+# Add root and src to sys.path to allow importing from src and internal imports within src
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Check if src is a subdirectory (Docker mount) or sibling (Local)
+if os.path.exists(os.path.join(current_dir, "src")):
+    sys.path.append(current_dir)
+    sys.path.append(os.path.join(current_dir, "src"))
+else:
+    sys.path.append(os.path.dirname(current_dir))
+    sys.path.append(os.path.join(os.path.dirname(current_dir), 'src'))
 
 from fastapi import FastAPI, Query, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import shutil
+import holidays
+from convertdate import hebrew, islamic
+from lunarcalendar import Converter, Solar
+
+# Import from mounted src
+from src.calendar_utils import HolidayProvider
+from src.calendar_generator import generate_calendar_table
 
 app = FastAPI(title="Calendar API", version="1.0.0")
 # ... (rest of imports and app setup)
@@ -57,6 +75,26 @@ class Settings(BaseModel):
     date_format: str = "%Y-%m-%d"
     color_map: dict[str, str] = {} # { category_value: hex_color }
     reload_interval: int = 0 # in minutes, 0 = manual
+    enable_advanced_calendar: bool = False
+    advanced_countries: list[str] = ["IT", "US", "MX", "CZ"] # Default supported
+    show_special_days: bool = True
+    enabled_cultural_calendars: list[str] = ["holidays_it", "holidays_us", "holidays_mx", "holidays_cz", "lunar", "hebrew", "islamic", "catholic"]
+
+
+class SpecialDay(BaseModel):
+    date: str = "" # YYYY-MM-DD
+    month: int | None = None
+    day: int | None = None
+    is_recurring: bool = False
+    tags: list[str] = []
+    where: list[str] = []
+
+
+class AssignRequest(BaseModel):
+    dates: list[str]
+    tags: list[str] = []
+    where: list[str] = []
+    is_recurring: bool = False
 
 
 class TagConfigItem(BaseModel):
@@ -70,23 +108,16 @@ class TagsConfig(BaseModel):
     where: list[TagConfigItem] = []
 
 
-class SpecialDay(BaseModel):
-    date: str
-    tags: list[str] = []
-    where: list[str] = []
-
-
-class AssignRequest(BaseModel):
-    dates: list[str]
-    tags: list[str] = []
-    where: list[str] = []
-
-
 # ── Settings persistence ──────────────────────────────────
 def load_settings() -> Settings:
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "r") as f:
-            return Settings(**json.load(f))
+            raw = json.load(f)
+        s = Settings(**raw)
+        # Auto-heal: if disk file is missing any fields, rewrite with full model
+        if set(raw.keys()) != set(s.model_dump().keys()):
+            save_settings_to_disk(s)
+        return s
     return Settings()
 
 
@@ -126,18 +157,32 @@ def save_special_days(days: list[SpecialDay]):
 
 # ── CSV event loader ──────────────────────────────────────
 def load_events_from_csv(settings: Settings) -> list:
-    if not settings.csv_path or not os.path.exists(settings.csv_path):
+    path = settings.csv_path
+    if not path:
         return []
+    
+    # Resolve relative paths relative to current dir (where main.py is)
+    if not os.path.isabs(path):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+        
+    if not os.path.exists(path):
+        print(f"ERROR: CSV path not found: {path}")
+        return []
+
     events = []
     try:
-        with open(settings.csv_path, "r", encoding="utf-8-sig") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
+                    start_val = row.get(settings.col_start_date, "").strip()
+                    if not start_val: continue
+                    
                     start = datetime.datetime.strptime(
-                        row[settings.col_start_date].strip(),
+                        start_val,
                         settings.date_format,
                     ).date()
+                    
                     end_raw = row.get(settings.col_end_date, "").strip()
                     end = (
                         datetime.datetime.strptime(end_raw, settings.date_format).date()
@@ -152,9 +197,11 @@ def load_events_from_csv(settings: Settings) -> list:
                             "category": row.get(settings.col_category, "default").strip(),
                         }
                     )
-                except (KeyError, ValueError):
+                except (KeyError, ValueError) as e:
+                    # print(f"DEBUG: skip row due to {e}")
                     continue
-    except Exception:
+    except Exception as e:
+        print(f"ERROR: Failed to read CSV {path}: {e}")
         return []
     return events
 
@@ -168,31 +215,27 @@ def generate_calendar_data(start_month: int, start_year: int, num_months: int):
     for _ in range(num_months):
         weeks = []
         for week_dates in cal.monthdatescalendar(cur_y, cur_m):
-            cw = week_dates[3].isocalendar()[1]  # ISO CW from Thursday
-            days = [
-                {
+            cw = week_dates[3].isocalendar()[1]
+            days = []
+            for d in week_dates:
+                days.append({
                     "date": d.isoformat(),
                     "day": d.day,
                     "day_of_week": d.weekday(),
                     "is_current_month": d.month == cur_m,
-                }
-                for d in week_dates
-            ]
+                })
             weeks.append({"cw": cw, "days": days})
 
-        months_data.append(
-            {
-                "year": cur_y,
-                "month": cur_m,
-                "month_name": calendar.month_name[cur_m],
-                "weeks": weeks,
-            }
-        )
+        months_data.append({
+            "year": cur_y,
+            "month": cur_m,
+            "month_name": calendar.month_name[cur_m],
+            "weeks": weeks,
+        })
         cur_m += 1
         if cur_m > 12:
             cur_m = 1
             cur_y += 1
-
     return months_data
 
 
@@ -214,6 +257,63 @@ def preview_csv(path: str):
             return {"headers": headers, "preview_rows": preview_rows}
     except Exception as e:
         raise HTTPException(500, detail=str(e))
+
+
+def get_advanced_data(start_date: datetime.date, end_date: datetime.date, settings: Settings):
+    advanced_map = {}
+    if settings.enable_advanced_calendar:
+        try:
+            df = generate_calendar_table(
+                start_date.isoformat(), 
+                end_date.isoformat(), 
+                freq="D",
+                countries=settings.advanced_countries,
+                n_workers=1
+            )
+            
+            if df is not None:
+                import pandas as pd
+                df = df.where(pd.notnull(df), None)
+                records = df.to_dict("records")
+                for rec in records:
+                    d_key = rec.get('date_utc')
+                    if hasattr(d_key, 'strftime'):
+                        d_key = d_key.strftime('%Y-%m-%d')
+                    elif isinstance(d_key, datetime.date):
+                        d_key = d_key.isoformat()
+                    
+                    if d_key:
+                        adv = {
+                            "fiscal_month": rec.get("ITTFiscalMonth"),
+                            "fiscal_week": rec.get("ITTFiscalWeek"),
+                            "is_fiscal_start": bool(rec.get("is_first_day_of_fiscal_period")) if rec.get("is_first_day_of_fiscal_period") is not None else False,
+                            "is_fiscal_end": bool(rec.get("is_last_day_of_fiscal_period")) if rec.get("is_last_day_of_fiscal_period") is not None else False,
+                            "week_of_month": rec.get("WeekOfMonth"),
+                            "is_last_week_month": bool(rec.get("IsLastWeekOfMonth")) if rec.get("IsLastWeekOfMonth") is not None else False,
+                            "season": rec.get("season_astronomical"),
+                            "holidays": {
+                                c: rec.get(f"HolidayName_{c}") 
+                                for c in settings.advanced_countries 
+                                if rec.get(f"HolidayName_{c}")
+                            },
+                            "is_business": {
+                                c: bool(rec.get(f"IsBusinessDay_{c}")) if rec.get(f"IsBusinessDay_{c}") is not None else True
+                                for c in settings.advanced_countries
+                            }
+                        }
+                        advanced_map[d_key] = adv
+        except Exception as e:
+            print(f"Advanced calendar generation failed: {e}")
+    return advanced_map
+
+
+def get_multicultural_map(start_date: datetime.date, end_date: datetime.date, settings: Settings):
+    return HolidayProvider.get_holidays(
+        start_date, 
+        end_date, 
+        settings.advanced_countries, 
+        settings.enabled_cultural_calendars
+    )
 
 
 # ── Endpoints ─────────────────────────────────────────────
@@ -252,16 +352,54 @@ def get_calendar(
             )
             cur += datetime.timedelta(days=1)
             
-    # Index special days by date
-    special_by_date = {d.date: d for d in special_days}
+    # Index special days (both absolute and recurring)
+    special_days = load_special_days()
+    abs_special = {d.date: d for d in special_days if not d.is_recurring and d.date}
+    rec_special = {(d.month, d.day): d for d in special_days if d.is_recurring and d.month and d.day}
 
+    # Advanced calendar data
+    start_date = datetime.date(start_year, start_month, 1)
+    # End date calculation
+    y, m = start_year, start_month
+    for _ in range(num_months):
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    end_date = datetime.date(y, m, 1) - datetime.timedelta(days=1)
+    
+    advanced_map = get_advanced_data(start_date, end_date, settings)
+    multi_map = get_multicultural_map(start_date, end_date, settings)
+    
     for month in data:
         for week in month["weeks"]:
             for day in week["days"]:
-                day["events"] = by_date.get(day["date"], [])
-                sd = special_by_date.get(day["date"])
-                if sd:
-                    day["special"] = sd.model_dump()
+                d_str = day["date"]
+                dt_obj = datetime.date.fromisoformat(d_str)
+                
+                # Tier 1: CSV Events
+                day["tier1"] = by_date.get(d_str, [])
+                day["events"] = day["tier1"]
+                
+                # Tier 2: Special Days
+                sd = abs_special.get(d_str) or rec_special.get((dt_obj.month, dt_obj.day))
+                day["tier2"] = {
+                    "tags": sd.tags if sd else [],
+                    "where": sd.where if sd else [],
+                    "is_recurring": sd.is_recurring if sd else False
+                }
+                day["special_tags"] = day["tier2"]["tags"]
+                day["where"] = day["tier2"]["where"]
+                
+                # Tier 3: Unified Metadata
+                tier3_items = multi_map.get(d_str, [])
+                adv = advanced_map.get(d_str)
+                
+                day["tier3"] = {
+                    "cultural": tier3_items,
+                    "advanced": adv
+                }
+                day["advanced"] = adv
 
     return {
         "months": data, 
@@ -317,11 +455,22 @@ def get_stats():
 
 
 @app.get("/api/week")
-def get_week():
-    """Return the current week's days and events."""
+def get_week(
+    year: int = Query(default=None),
+    month: int = Query(default=None),
+    day: int = Query(default=None),
+):
+    """Return a week's days and events. Defaults to current week if no date given."""
     today = datetime.date.today()
-    # Find Monday of the current week
-    start_of_week = today - datetime.timedelta(days=today.weekday())
+    if year and month and day:
+        try:
+            anchor = datetime.date(year, month, day)
+        except ValueError:
+            anchor = today
+    else:
+        anchor = today
+    # Find Monday of the anchor week
+    start_of_week = anchor - datetime.timedelta(days=anchor.weekday())
     
     week_days = []
     for i in range(7):
@@ -336,16 +485,49 @@ def get_week():
         
     settings = load_settings()
     events = load_events_from_csv(settings)
+    special_days = load_special_days()
+    abs_special = {d.date: d for d in special_days if not d.is_recurring and d.date}
+    rec_special = {(d.month, d.day): d for d in special_days if d.is_recurring and d.month and d.day}
+    
+    # Advanced data for the week — convert to datetime.date objects
+    week_start_date = datetime.date.fromisoformat(week_days[0]["date"])
+    week_end_date   = datetime.date.fromisoformat(week_days[-1]["date"])
+    advanced_map = get_advanced_data(week_start_date, week_end_date, settings)
+    multi_map = get_multicultural_map(week_start_date, week_end_date, settings)
     
     # Filter and attach events
     for day in week_days:
         d_iso = day["date"]
+        dt_obj = datetime.date.fromisoformat(d_iso)
+        
+        # Tier 1: CSV Events
         day_events = []
         for ev in events:
             if ev["start_date"] <= d_iso <= ev["end_date"]:
                 day_events.append(ev)
-        day["events"] = day_events
+        day["tier1"] = day_events
+        day["events"] = day_events # legacy
         
+        # Tier 2: Special Days
+        sd = abs_special.get(d_iso) or rec_special.get((dt_obj.month, dt_obj.day))
+        day["tier2"] = {
+            "tags": sd.tags if sd else [],
+            "where": sd.where if sd else [],
+            "is_recurring": sd.is_recurring if sd else False
+        }
+        # legacy
+        day["special_tags"] = day["tier2"]["tags"]
+        day["where"] = day["tier2"]["where"]
+            
+        # Tier 3: Cultural Calendars
+        tier3_items = multi_map.get(d_iso, [])
+        adv = advanced_map.get(d_iso)
+        day["tier3"] = {
+            "cultural": tier3_items,
+            "advanced": adv
+        }
+        day["advanced"] = adv # legacy
+            
     return {"days": week_days}
 
 
@@ -379,16 +561,47 @@ def get_all_special_days():
 @app.post("/api/special-days/assign")
 def assign_special_days(req: AssignRequest):
     current_days = load_special_days()
-    days_map = {d.date: d for d in current_days}
+    # We use a composite key: (date if not recurring else None, month if recurring else None, day if recurring else None)
+    # But simpler: just key by date for absolute, and a separate logic for recurring.
+    # To keep it simple for now, we'll store them all in one list and update by match.
     
     for date_str in req.dates:
-        if date_str in days_map:
-            days_map[date_str].tags = req.tags
-            days_map[date_str].where = req.where
+        dt = datetime.date.fromisoformat(date_str)
+        found = False
+        
+        if req.is_recurring:
+            # Look for existing recurring entry for this month/day
+            for d in current_days:
+                if d.is_recurring and d.month == dt.month and d.day == dt.day:
+                    d.tags = req.tags
+                    d.where = req.where
+                    found = True
+                    break
+            if not found:
+                current_days.append(SpecialDay(
+                    month=dt.month, 
+                    day=dt.day, 
+                    is_recurring=True, 
+                    tags=req.tags, 
+                    where=req.where
+                ))
         else:
-            days_map[date_str] = SpecialDay(date=date_str, tags=req.tags, where=req.where)
+            # Look for existing absolute entry for this date
+            for d in current_days:
+                if not d.is_recurring and d.date == date_str:
+                    d.tags = req.tags
+                    d.where = req.where
+                    found = True
+                    break
+            if not found:
+                current_days.append(SpecialDay(
+                    date=date_str, 
+                    is_recurring=False, 
+                    tags=req.tags, 
+                    where=req.where
+                ))
             
-    # Remove entries with no tags and no 'where'
-    final_days = [d for d in days_map.values() if d.tags or d.where]
+    # Clean up: remove entries with no tags and no where
+    final_days = [d for d in current_days if d.tags or d.where]
     save_special_days(final_days)
     return {"status": "ok", "count": len(req.dates)}

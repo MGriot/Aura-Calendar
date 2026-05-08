@@ -10,6 +10,12 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
     col_category: 'category',
     date_format: '%Y-%m-%d',
     color_map: {},
+    enable_advanced_calendar: false,
+    advanced_countries: ['IT', 'US'],
+    show_special_days: true,
+    enabled_cultural_calendars: ['holidays', 'lunar', 'hebrew', 'islamic'],
+    reload_interval: 0,
+    external_url: '',
   });
   const [headers, setHeaders] = useState([]);
   const [preview, setPreview] = useState([]);
@@ -22,7 +28,7 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
-      .then((data) => setSettings(data))
+      .then((data) => setSettings(prev => ({ ...prev, ...data })))
       .catch(() => {});
   }, []);
 
@@ -106,11 +112,16 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
         body: JSON.stringify(settings),
       });
       const data = await res.json();
+      
+      const eventMsg = settings.csv_path 
+        ? `${data.events_loaded} events loaded.`
+        : 'Settings updated (No CSV linked).';
+        
       setStatus({
         type: 'success',
-        msg: `Saved! ${data.events_loaded} events loaded.`,
+        msg: `Configuration Saved! ${eventMsg}`,
       });
-      setTimeout(() => onSaved(), 800);
+      setTimeout(() => onSaved(), 1000);
     } catch {
       setStatus({ type: 'error', msg: 'Failed to save settings' });
     } finally {
@@ -231,6 +242,51 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
             </div>
           </div>
           
+          <fieldset className="fieldset">
+            <legend className="fieldset__legend">Calendar Metadata Components</legend>
+            <div className="cultural-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {[
+                { id: 'holidays_it', label: 'Italy Holidays (IT)' },
+                { id: 'holidays_us', label: 'USA Holidays (US)' },
+                { id: 'holidays_mx', label: 'Mexico Holidays (MX)' },
+                { id: 'holidays_cz', label: 'Czech Republic (CZ)' },
+                { id: 'catholic', label: 'Catholic (Liturgical)' },
+                { id: 'chinese', label: 'Chinese (Lunar Festivals)' },
+                { id: 'hebrew', label: 'Hebrew Calendar' },
+                { id: 'islamic', label: 'Islamic (Hijri) Calendar' },
+                { id: 'lunar', label: 'Lunar Dates (L:M/D)' },
+              ].map(cal => (
+                <label key={cal.id} className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={(settings.enabled_cultural_calendars || []).includes(cal.id)}
+                    onChange={(e) => {
+                      const current = settings.enabled_cultural_calendars || [];
+                      const next = e.target.checked 
+                        ? [...current, cal.id]
+                        : current.filter(id => id !== cal.id);
+                      update('enabled_cultural_calendars', next);
+                    }}
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  <span style={{ fontSize: '0.85rem' }}>{cal.label}</span>
+                </label>
+              ))}
+            </div>
+            
+            <div className="field" style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+              <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={settings.show_special_days ?? true}
+                  onChange={(e) => update('show_special_days', e.target.checked)}
+                  style={{ width: '18px', height: '18px' }}
+                />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Show User-cast Special Days markers</span>
+              </label>
+            </div>
+          </fieldset>
+
           {/* Column Mapping */}
           {headers.length > 0 && (
             <fieldset className="fieldset">

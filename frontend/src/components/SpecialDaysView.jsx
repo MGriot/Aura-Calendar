@@ -9,11 +9,16 @@ export default function SpecialDaysView({ settings }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [tagsConfig, setTagsConfig] = useState(null);
   const [specialDays, setSpecialDays] = useState([]);
-  const [viewYear, setViewYear] = useState(new Date().getFullYear());
+  const [viewYear, setViewYear] = useState(() => Number(sessionStorage.getItem('aura-special-year')) || new Date().getFullYear());
   
+  useEffect(() => {
+    sessionStorage.setItem('aura-special-year', viewYear);
+  }, [viewYear]);
+
   // Selection state
   const [formTags, setFormTags] = useState([]);
-  const [formWhere, setFormWhere] = useState("");
+  const [formLocations, setFormLocations] = useState([]);
+  const [formRecurring, setFormRecurring] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -49,15 +54,49 @@ export default function SpecialDaysView({ settings }) {
         body: JSON.stringify({
           dates: selectedDates,
           tags: formTags,
-          where: formWhere
+          where: formLocations,
+          is_recurring: formRecurring
         })
       });
+      if (res.ok) {
+        setSelectedDates([]);
+        setFormTags([]);
+        setFormLocations([]);
+        setFormRecurring(false);
+        fetchData();
+      }
+    } catch (err) {
+      console.error("Failed to assign tags:", err);
+    }
+  };
+
+  const handleClearSelected = async () => {
+    if (selectedDates.length === 0) return;
+    if (!confirm(`Are you sure you want to remove all tags from ${selectedDates.length} selected dates?`)) return;
+    
+    try {
+      // Sending empty tags/where will remove the entries in assign_special_days
+      const res = await fetch('/api/special-days/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dates: selectedDates,
+          tags: [],
+          where: [],
+          is_recurring: false // This will clear absolute entries
+        })
+      });
+      
+      // Also clear recurring if that was the intent? 
+      // For now, let's just do a second call if they want to clear recurring.
+      // But simpler: just clear whatever is there.
+      
       if (res.ok) {
         setSelectedDates([]);
         fetchData();
       }
     } catch (err) {
-      console.error("Failed to assign tags:", err);
+      console.error("Failed to clear tags:", err);
     }
   };
 
@@ -131,8 +170,12 @@ export default function SpecialDaysView({ settings }) {
               <div className="mini-month__days">
                 {WEEKDAYS.map(d => <div key={d} className="mini-day-header">{d}</div>)}
                 {month.weeks.map(week => week.days.map(day => {
+                  const dt = new Date(day.date);
                   const isSelected = selectedDates.includes(day.date);
-                  const isSpecial = specialDays.find(sd => sd.date === day.date);
+                  const isSpecial = specialDays.find(sd => 
+                    sd.date === day.date || 
+                    (sd.is_recurring && sd.month === (dt.getMonth() + 1) && sd.day === dt.getDate())
+                  );
                   const isCurrentMonth = day.is_current_month;
                   
                   let style = {};
@@ -185,17 +228,42 @@ export default function SpecialDaysView({ settings }) {
 
             <div className="form-section">
               <label>Location (Where)</label>
-              <select className="field__select" value={formWhere} onChange={(e) => setFormWhere(e.target.value)}>
-                <option value="">None</option>
+              <div className="tag-chips">
                 {tagsConfig?.where.map(tag => (
-                  <option key={tag.id} value={tag.id}>{tag.label}</option>
+                  <button 
+                    key={tag.id}
+                    className={`tag-chip ${formLocations.includes(tag.id) ? 'tag-chip--active' : ''}`}
+                    onClick={() => setFormLocations(prev => 
+                      prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id]
+                    )}
+                    style={{ '--tag-color': tag.color }}
+                  >
+                    {tag.label}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
-            <button className="btn btn--primary" onClick={handleAssign} disabled={selectedDates.length === 0} style={{ width: '100%' }}>
-              <Save size={16} /> Apply Tags
-            </button>
+            <div className="form-section">
+              <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '12px' }}>
+                <input 
+                  type="checkbox" 
+                  checked={formRecurring}
+                  onChange={(e) => setFormRecurring(e.target.checked)}
+                />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Mark as Recurring (Annual)</span>
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button className="btn btn--primary" onClick={handleAssign} disabled={selectedDates.length === 0} style={{ width: '100%' }}>
+                <Save size={16} /> Apply Tags
+              </button>
+              
+              <button className="btn btn--secondary" onClick={handleClearSelected} disabled={selectedDates.length === 0} style={{ width: '100%', color: 'var(--accent-red)' }}>
+                <Trash2 size={16} /> Remove Tags
+              </button>
+            </div>
           </div>
 
           <hr className="divider" />

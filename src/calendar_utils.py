@@ -7,8 +7,150 @@ import pytz
 import os
 import warnings
 import multiprocessing
+from datetime import date, timedelta
+from typing import List, Dict, Any, Optional
+
+# Additional imports for multicultural support
+from convertdate import hebrew, islamic, gregorian
+from lunarcalendar import Converter, Solar
+from dateutil import easter
 
 # Suppress UserWarning for timezone drop in PeriodArray/Index conversion
+# ... (existing warning filter)
+
+class HolidayProvider:
+    """Unified provider for National, Religious, and Cultural holidays."""
+
+    @staticmethod
+    def get_holidays(start_date: date, end_date: date, countries: List[str], enabled_types: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        holiday_map = {}
+        years = list(range(start_date.year, end_date.year + 1))
+
+        # 1. National Holidays (holidays package)
+        # Map frontend granular IDs to country codes
+        country_obj = {}
+        country_map = {
+            "holidays_it": "IT",
+            "holidays_us": "US",
+            "holidays_mx": "MX",
+            "holidays_cz": "CZ"
+        }
+        for hid, code in country_map.items():
+            if hid in enabled_types:
+                try:
+                    country_obj[code] = holidays.CountryHoliday(code, years=years)
+                except:
+                    continue
+
+        # 2. Chinese Lunar Festivals
+
+        # Spring Festival (L:1/1), Lantern (L:1/15), Qingming (Solar Approx), Dragon Boat (L:5/5), Mid-Autumn (L:8/15)
+        chinese_festivals = {
+            (1, 1): "Spring Festival (Chinese New Year)",
+            (1, 15): "Lantern Festival",
+            (5, 5): "Dragon Boat Festival",
+            (8, 15): "Mid-Autumn Festival"
+        }
+
+        # 3. Catholic Floating Holidays (relative to Easter)
+        # Ash Wednesday (-46), Palm Sunday (-7), Good Friday (-2), Easter (0), Easter Monday (+1), Pentecost (+50)
+        # Fixed: Epiphany (Jan 6), Assumption (Aug 15), All Saints (Nov 1), Immaculate (Dec 8), Christmas (Dec 25)
+        catholic_offsets = {
+            -46: "Ash Wednesday",
+            -7: "Palm Sunday",
+            -2: "Good Friday",
+            0: "Easter Sunday",
+            1: "Easter Monday",
+            50: "Pentecost"
+        }
+        catholic_fixed = {
+            (1, 6): "Epiphany",
+            (8, 15): "Assumption of Mary",
+            (11, 1): "All Saints' Day",
+            (12, 8): "Immaculate Conception",
+            (12, 25): "Christmas Day"
+        }
+
+        cur = start_date
+        while cur <= end_date:
+            d_str = cur.isoformat()
+            items = []
+            
+            # National
+            for c, h in country_obj.items():
+                name = h.get(cur)
+                if name:
+                    # Explicitly show which nation has it as requested
+                    items.append({
+                        "type": "holiday", 
+                        "name": f"{name} ({c})", 
+                        "country": c, 
+                        "category": "national",
+                        "color": "#ef4444" # Red for national
+                    })
+            
+            # Chinese (Lunar)
+            if "chinese" in enabled_types: # Matching the setting id used in frontend
+                try:
+                    solar = Solar(cur.year, cur.month, cur.day)
+                    lunar = Converter.Solar2Lunar(solar)
+                    lunar_key = (lunar.month, lunar.day)
+                    if lunar_key in chinese_festivals:
+                        items.append({
+                            "type": "cultural", 
+                            "name": f"{chinese_festivals[lunar_key]} (CN)", 
+                            "category": "chinese",
+                            "color": "#f59e0b" # Orange/Gold for Chinese
+                        })
+                except:
+                    pass
+
+            # Catholic
+            if "catholic" in enabled_types:
+                # Fixed
+                fixed_key = (cur.month, cur.day)
+                if fixed_key in catholic_fixed:
+                    items.append({
+                        "type": "religious", 
+                        "name": catholic_fixed[fixed_key], 
+                        "category": "catholic",
+                        "color": "#8b5cf6" # Purple for Catholic
+                    })
+                
+                # Floating
+                easter_date = easter.easter(cur.year)
+                delta = (cur - easter_date).days
+                if delta in catholic_offsets:
+                    items.append({
+                        "type": "religious", 
+                        "name": catholic_offsets[delta], 
+                        "category": "catholic",
+                        "color": "#8b5cf6"
+                    })
+
+            # Hebrew
+            if "hebrew" in enabled_types:
+                try:
+                    _, h_month, h_day = hebrew.from_gregorian(cur.year, cur.month, cur.day)
+                    # You could add specific Hebrew holidays here too
+                    items.append({"type": "cultural", "name": f"Hebrew: {h_month}/{h_day}", "category": "hebrew"})
+                except:
+                    pass
+
+            # Islamic
+            if "islamic" in enabled_types:
+                try:
+                    _, i_month, i_day = islamic.from_gregorian(cur.year, cur.month, cur.day)
+                    items.append({"type": "cultural", "name": f"Islamic: {i_month}/{i_day}", "category": "islamic"})
+                except:
+                    pass
+
+            if items:
+                holiday_map[d_str] = items
+            
+            cur += timedelta(days=1)
+            
+        return holiday_map
 warnings.filterwarnings(
     "ignore",
     message="Converting to PeriodArray/Index representation will drop timezone information.",
@@ -157,52 +299,12 @@ def calculate_itt_fiscal_columns(
     df: pd.DataFrame, date_col: str = "datetime_utc"
 ) -> pd.DataFrame:
     """
-    Add ITT fiscal calendar columns to the DataFrame using a 4-4-5 pattern.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame with a datetime column.
-    date_col : str, default='datetime'
-        Name of the datetime column.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with added 'ITTFiscalMonth' column.
+    ITT fiscal calendar logic commented out as requested.
     """
-    pattern = [4, 4, 5] * 4
-    years = df[date_col].dt.year.unique()
-    boundaries_by_year = {
-        year: generate_boundaries_with_alignment(year, pattern) for year in years
-    }
-
-    df = assign_fiscal_periods_strict(df, date_col, boundaries_by_year)
+    df["ITTFiscalMonth"] = None
+    df["ITTFiscalWeek"] = None
     df["is_first_day_of_fiscal_period"] = False
     df["is_last_day_of_fiscal_period"] = False
-
-    utc = pytz.UTC
-
-    for year, boundaries in boundaries_by_year.items():
-        for start_dt, end_dt in boundaries:
-            # Ensure start and end are timezone-aware for comparison
-            if start_dt.tzinfo is None:
-                start_dt = utc.localize(start_dt)
-            if end_dt.tzinfo is None:
-                end_dt = utc.localize(end_dt)
-
-            # Mark the first day of the fiscal period
-            df.loc[
-                (df[date_col].dt.date == start_dt.date())
-                & (df[date_col].dt.year == year),
-                "is_first_day_of_fiscal_period",
-            ] = True
-            # Mark the last day of the fiscal period
-            df.loc[
-                (df[date_col].dt.date == end_dt.date())
-                & (df[date_col].dt.year == year),
-                "is_last_day_of_fiscal_period",
-            ] = True
     return df
 
 
