@@ -105,6 +105,9 @@ class Settings(BaseModel):
     advanced_countries: list[str] = ["IT", "US", "MX", "CZ"] # Default supported
     show_special_days: bool = True
     enabled_cultural_calendars: list[str] = ["holidays_it", "holidays_us", "holidays_mx", "holidays_cz", "lunar", "hebrew", "islamic", "catholic"]
+    # Markdown template for per-event detail card. Use {{field_name}} to inject CSV columns or event properties.
+    # Example: "**{{title}}**\nCategory: {{category}}\nLocation: {{place}}"
+    event_card_template: str = "**{{title}}**\nCategory: {{category}}\nFrom: {{start_date}}\nTo: {{end_date}}"
 
 
 class SpecialDay(BaseModel):

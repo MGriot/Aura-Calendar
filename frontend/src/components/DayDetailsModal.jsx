@@ -1,7 +1,7 @@
 import { X, Calendar as CalendarIcon, MapPin, Tag, CheckCircle } from 'lucide-react';
 
 export default function DayDetailsModal({ 
-  day, tagsConfig, onClose, colorMap 
+  day, tagsConfig, onClose, colorMap, eventTemplate
 }) {
   if (!day) return null;
   const { date, events = [], advanced, special_tags: specialTags, where: locations } = day;
@@ -92,6 +92,27 @@ export default function DayDetailsModal({
             <div className="day-event-list">
               {events.map((ev, i) => {
                 const color = colorMap?.[ev.category] || '#3b82f6';
+
+                // Render user-provided template (simple variable replacement + minimal markdown)
+                const renderTemplate = (template, obj) => {
+                  if (!template) return '';
+                  let out = template;
+                  // replace {{field}} tokens
+                  out = out.replace(/{{\s*([^}]+)\s*}}/g, (m, p1) => {
+                    const key = p1.trim();
+                    return obj[key] ?? '';
+                  });
+                  // minimal markdown -> html
+                  out = out
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                    .replace(/\n/g, '<br/>');
+                  return out;
+                };
+
+                const rendered = renderTemplate(eventTemplate || settings?.event_card_template, ev);
+
                 return (
                   <div className="day-event-card" key={i} style={{ '--event-color': color }}>
                     <div className="day-event-card__side" />
@@ -102,7 +123,7 @@ export default function DayDetailsModal({
                           {ev.category}
                         </span>
                       </div>
-                      
+                       
                       <div className="day-event-card__details">
                         <div className="detail-item">
                           <Tag size={14} />
@@ -127,6 +148,10 @@ export default function DayDetailsModal({
                           <span>From {ev.start_date} to {ev.end_date}</span>
                         )}
                       </div>
+
+                      {rendered && (
+                        <div className="day-event-card__custom" style={{ marginTop: '8px', fontSize: '0.95rem' }} dangerouslySetInnerHTML={{ __html: rendered }} />
+                      )}
                     </div>
                   </div>
                 );

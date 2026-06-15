@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 
-export default function WeekView({ onDayClick, startYear, startMonth, settings, tagsConfig }) {
+export default function WeekView({ onDayClick, startYear, startMonth, startDay, settings, tagsConfig }) {
   const [week, setWeek] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    // Fetch the week containing the first day of the currently viewed month
-    fetch(`/api/week?year=${startYear}&month=${startMonth}&day=1`)
+    // Fetch the week containing the anchor day (defaults provided by App)
+    const dayParam = typeof startDay !== 'undefined' ? startDay : 1;
+    fetch(`/api/week?year=${startYear}&month=${startMonth}&day=${dayParam}`)
       .then(r => r.json())
       .then(data => setWeek(data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [startYear, startMonth]);
+  }, [startYear, startMonth, startDay]);
 
   if (loading) return (
     <div className="view-placeholder">

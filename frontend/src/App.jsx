@@ -14,6 +14,8 @@ export default function App() {
   const now = new Date();
   const [startMonth, setStartMonth] = useState(() => Number(sessionStorage.getItem('aura-month')) || now.getMonth() + 1);
   const [startYear, setStartYear] = useState(() => Number(sessionStorage.getItem('aura-year')) || now.getFullYear());
+  const [startDay, setStartDay] = useState(() => Number(sessionStorage.getItem('aura-day')) || now.getDate());
+  const [lastFetch, setLastFetch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('aura-theme') || 'dark');
@@ -28,6 +30,7 @@ export default function App() {
   useEffect(() => { sessionStorage.setItem('aura-month', startMonth); }, [startMonth]);
   useEffect(() => { sessionStorage.setItem('aura-year', startYear); }, [startYear]);
   useEffect(() => { sessionStorage.setItem('aura-tab', activeTab); }, [activeTab]);
+  useEffect(() => { sessionStorage.setItem('aura-day', startDay); }, [startDay]);
 
   // Apply theme to document
   useEffect(() => {
@@ -61,7 +64,13 @@ export default function App() {
   }, [startMonth, startYear]);
 
   useEffect(() => {
-    fetchCalendar();
+    fetchCalendarWithTimestamp();
+  }, [fetchCalendarWithTimestamp]);
+
+  // update lastFetch timestamp when calendar is fetched
+  const fetchCalendarWithTimestamp = useCallback(async () => {
+    await fetchCalendar();
+    setLastFetch(Date.now());
   }, [fetchCalendar]);
 
   // Auto-reload polling
@@ -69,24 +78,51 @@ export default function App() {
     if (settings?.reload_interval > 0) {
       const ms = settings.reload_interval * 60 * 1000;
       const timer = setInterval(() => {
-        fetchCalendar();
+        fetchCalendarWithTimestamp();
       }, ms);
       return () => clearInterval(timer);
     }
-  }, [settings?.reload_interval, fetchCalendar]);
+  }, [settings?.reload_interval, fetchCalendarWithTimestamp]);
 
   const navigate = (direction) => {
-    let m = startMonth + direction * 4;
-    let y = startYear;
-    while (m > 12) { m -= 12; y++; }
-    while (m < 1) { m += 12; y--; }
-    setStartMonth(m);
-    setStartYear(y);
+    if (activeTab === 'week') {
+      // move by weeks
+      const dt = new Date(startYear, startMonth - 1, startDay);
+      dt.setDate(dt.getDate() + direction * 7);
+      setStartYear(dt.getFullYear());
+      setStartMonth(dt.getMonth() + 1);
+      setStartDay(dt.getDate());
+      sessionStorage.setItem('aura-day', dt.getDate());
+    } else {
+      let m = startMonth + direction * 4;
+      let y = startYear;
+      while (m > 12) { m -= 12; y++; }
+      while (m < 1) { m += 12; y--; }
+      setStartMonth(m);
+      setStartYear(y);
+    }
   };
 
-  const rangeLabel = months
-    ? `${months[0].month_name.slice(0, 3)} – ${months[months.length - 1].month_name.slice(0, 3)} ${months[months.length - 1].year}`
-    : '';
+  const getWeekNumber = (d) => {
+    // ISO week number
+    const date = new Date(d.getTime());
+    date.setHours(0,0,0,0);
+    // Thursday in current week decides the year.
+    date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+    const week1 = new Date(date.getFullYear(), 0, 4);
+    return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  };
+
+  const rangeLabel = (() => {
+    if (activeTab === 'week') {
+      const anchor = new Date(startYear, startMonth - 1, startDay);
+      const w = getWeekNumber(anchor);
+      return `Week ${w} ${anchor.getFullYear()}`;
+    }
+    return months
+      ? `${months[0].month_name.slice(0, 3)} – ${months[months.length - 1].month_name.slice(0, 3)} ${months[months.length - 1].year}`
+      : '';
+  })();
 
   return (
     <div className="app">
@@ -102,6 +138,8 @@ export default function App() {
         onOpenSettings={() => setShowSettings(true)}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        reloadInterval={settings?.reload_interval}
+        lastFetch={lastFetch}
       />
 
       <main className="calendar-content">
@@ -136,9 +174,10 @@ export default function App() {
             onDayClick={(day) => setSelectedDay(day)} 
             startYear={startYear}
             startMonth={startMonth}
-            settings={settings}
-            tagsConfig={tagsConfig}
-          />
+              startDay={startDay}
+              settings={settings}
+              tagsConfig={tagsConfig}
+            />
         )}
 
         {!loading && activeTab === 'events' && (
@@ -168,6 +207,7 @@ export default function App() {
           tagsConfig={tagsConfig}
           onClose={() => setSelectedDay(null)}
           colorMap={settings?.color_map}
+          eventTemplate={settings?.event_card_template}
         />
       )}
     </div>

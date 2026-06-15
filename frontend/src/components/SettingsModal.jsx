@@ -16,6 +16,7 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
     enabled_cultural_calendars: ['holidays', 'lunar', 'hebrew', 'islamic'],
     reload_interval: 0,
     external_url: '',
+    event_card_template: '**{{title}}**\nCategory: {{category}}\nFrom: {{start_date}}\nTo: {{end_date}}',
   });
   const [headers, setHeaders] = useState([]);
   const [preview, setPreview] = useState([]);
@@ -31,6 +32,15 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
       .then((data) => setSettings(prev => ({ ...prev, ...data })))
       .catch(() => {});
   }, []);
+
+  // Auto-preview when a CSV is already configured (either internal path or external URL)
+  useEffect(() => {
+    if (settings.csv_path || settings.external_url) {
+      // small delay so state settles
+      const t = setTimeout(() => previewCSV(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [settings.csv_path, settings.external_url]);
 
   // Sync unique categories from preview
   useEffect(() => {
@@ -222,6 +232,19 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
                   id="input-date-format"
                 />
                 <span className="field__hint">Python strftime format (e.g. %Y-%m-%d)</span>
+              </div>
+
+              <div className="field">
+                <label className="field__label">Event Card Template (Markdown)</label>
+                <textarea
+                  className="field__input"
+                  rows={4}
+                  value={settings.event_card_template || ''}
+                  onChange={(e) => update('event_card_template', e.target.value)}
+                  placeholder={'**{{title}}**\nCategory: {{category}}\nFrom: {{start_date}}'}
+                  id="input-event-template"
+                />
+                <span className="field__hint">Use {{field_name}} to inject event fields. Basic Markdown supported: **bold**, *italic*, `code`.</span>
               </div>
               
               <div className="field">
