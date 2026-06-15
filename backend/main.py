@@ -62,6 +62,13 @@ async def upload_file(file: UploadFile = File(...)):
                 pass
         final_path = os.path.join(UPLOAD_DIR, file.filename)
         os.replace(tmp_path, final_path)
+        # Update settings to point to the uploaded CSV so UI shows it in Settings
+        try:
+            s = load_settings()
+            s.csv_path = os.path.abspath(final_path)
+            save_settings_to_disk(s)
+        except Exception as e:
+            print(f"Warning: failed to persist csv_path to settings: {e}")
         return {"status": "ok", "path": os.path.abspath(final_path), "filename": file.filename}
     except Exception as e:
         try:
