@@ -7,6 +7,9 @@ import json
 import os
 import sys
 import shutil
+import io
+import requests
+from dateutil.parser import parse as dateutil_parse
 
 # Add root and src to sys.path to allow importing from src and internal imports within src
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -156,39 +159,80 @@ def save_special_days(days: list[SpecialDay]):
 
 
 # ── CSV event loader ──────────────────────────────────────
+
+def try_parse_date(val: str, primary_fmt: str) -> datetime.date:
+    """Try parsing a date string using the configured primary format first, then a set of common fallbacks.
+    Returns a datetime.date on success or raises ValueError on failure.
+    """
+    if not val:
+        raise ValueError("Empty date")
+
+    # Try primary format first (keeps existing behavior when user specifies a specific format)
+    try:
+        return datetime.datetime.strptime(val, primary_fmt).date()
+    except Exception:
+        pass
+
+    # Common fallbacks (two/ four digit years, different separators)
+    fallbacks = [
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%d-%m-%y",
+        "%d/%m/%y",
+        "%m/%d/%y",
+        "%y-%m-%d",
+    ]
+    for fmt in fallbacks:
+        try:
+            return datetime.datetime.strptime(val, fmt).date()
+        except Exception:
+            continue
+
+    # Last resort: use dateutil's parse which handles many human formats
+    try:
+        dt = dateutil_parse(val, dayfirst=True)
+        return dt.date()
+    except Exception as e:
+        raise ValueError(f"Unrecognized date format: {val}")
+
 def load_events_from_csv(settings: Settings) -> list:
     path = settings.csv_path
     if not path:
         return []
     
-    # Resolve relative paths relative to current dir (where main.py is)
-    if not os.path.isabs(path):
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
-        
-    if not os.path.exists(path):
-        print(f"ERROR: CSV path not found: {path}")
-        return []
+    # If path is a remote URL, we'll stream it; otherwise resolve local paths relative to backend dir
+    if path.lower().startswith("http://") or path.lower().startswith("https://"):
+        # remote URL — skip local existence check
+        pass
+    else:
+        # Resolve relative paths relative to current dir (where main.py is)
+        if not os.path.isabs(path):
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+        if not os.path.exists(path):
+            print(f"ERROR: CSV path not found: {path}")
+            return []
 
     events = []
     try:
-        with open(path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
+        if path.lower().startswith("http://") or path.lower().startswith("https://"):
+            r = requests.get(path, timeout=15)
+            r.raise_for_status()
+            reader = csv.DictReader(io.StringIO(r.text))
+        else:
+            with open(path, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+        for row in reader:
                 try:
                     start_val = row.get(settings.col_start_date, "").strip()
                     if not start_val: continue
                     
-                    start = datetime.datetime.strptime(
-                        start_val,
-                        settings.date_format,
-                    ).date()
+                    start = try_parse_date(start_val, settings.date_format)
                     
                     end_raw = row.get(settings.col_end_date, "").strip()
-                    end = (
-                        datetime.datetime.strptime(end_raw, settings.date_format).date()
-                        if end_raw
-                        else start
-                    )
+                    end = (try_parse_date(end_raw, settings.date_format) if end_raw else start)
                     events.append(
                         {
                             "start_date": start.isoformat(),
@@ -242,19 +286,35 @@ def generate_calendar_data(start_month: int, start_year: int, num_months: int):
 # ── CSV Preview ───────────────────────────────────────────
 @app.get("/api/csv/preview")
 def preview_csv(path: str):
-    """Read first few rows of a CSV to help with mapping."""
-    if not os.path.exists(path):
-        raise HTTPException(404, detail=f"File not found: {path}")
-    
+    """Read first few rows of a CSV to help with mapping.
+
+    Supports local file paths and remote URLs. Remote files are streamed and not persisted.
+    """
     try:
-        with open(path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            headers = reader.fieldnames or []
-            preview_rows = []
-            for i, row in enumerate(reader):
-                if i >= 5: break
-                preview_rows.append(row)
-            return {"headers": headers, "preview_rows": preview_rows}
+        if path.lower().startswith("http://") or path.lower().startswith("https://"):
+            # Stream remote CSV without saving to disk
+            r = requests.get(path, timeout=15)
+            r.raise_for_status()
+            text = r.text
+            reader = csv.DictReader(io.StringIO(text))
+        else:
+            if not os.path.exists(path):
+                # Try resolving relative to backend dir
+                if not os.path.isabs(path):
+                    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+                if not os.path.exists(path):
+                    raise HTTPException(404, detail=f"File not found: {path}")
+            with open(path, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+
+        headers = reader.fieldnames or []
+        preview_rows = []
+        for i, row in enumerate(reader):
+            if i >= 5: break
+            preview_rows.append(row)
+        return {"headers": headers, "preview_rows": preview_rows}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, detail=str(e))
 

@@ -7,3 +7,4 @@ pytz
 tqdm
 convertdate
 lunarcalendar
+requests==2.31.0
