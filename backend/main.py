@@ -279,6 +279,7 @@ def load_events_from_csv(settings: Settings) -> list:
                             "end_date": end.isoformat(),
                             "title": row.get(settings.col_event_name, "Untitled").strip(),
                             "category": row.get(settings.col_category, "default").strip(),
+                            "data": {k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
                         }
                     )
                 except (KeyError, ValueError) as e:

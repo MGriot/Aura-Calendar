@@ -100,7 +100,7 @@ export default function DayDetailsModal({
                   // replace {{field}} tokens
                   out = out.replace(/{{\s*([^}]+)\s*}}/g, (m, p1) => {
                     const key = p1.trim();
-                    return obj[key] ?? '';
+                    return (obj[key] ?? (obj.data && obj.data[key]) ?? '') ;
                   });
                   // minimal markdown -> html
                   out = out
@@ -111,7 +111,7 @@ export default function DayDetailsModal({
                   return out;
                 };
 
-                const rendered = renderTemplate(eventTemplate || settings?.event_card_template, ev);
+                const rendered = renderTemplate(eventTemplate || '', ev);
 
                 return (
                   <div className="day-event-card" key={i} style={{ '--event-color': color }}>
