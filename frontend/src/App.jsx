@@ -19,7 +19,35 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('aura-theme') || 'dark');
-  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('aura-tab') || 'month');
+
+  const tabPathMap = { month: '/', week: '/week', dashboard: '/dashboard', events: '/events', special_days: '/special-days' };
+  const pathTabMap = Object.fromEntries(Object.entries(tabPathMap).map(([k,v]) => [v,k]));
+  const [activeTab, _setActiveTab] = useState(() => {
+    try {
+      const path = window.location.pathname || '/';
+      return pathTabMap[path] || sessionStorage.getItem('aura-tab') || 'month';
+    } catch (e) {
+      return sessionStorage.getItem('aura-tab') || 'month';
+    }
+  });
+  const handleSetActiveTab = (tab) => {
+    _setActiveTab(tab);
+    sessionStorage.setItem('aura-tab', tab);
+    const path = tabPathMap[tab] || '/';
+    try { window.history.pushState({}, '', path); } catch (e) {}
+  };
+
+  // sync with browser navigation (back/forward)
+  useEffect(() => {
+    const onPop = () => {
+      const path = window.location.pathname || '/';
+      const newTab = pathTabMap[path] || 'month';
+      _setActiveTab(newTab);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const [months, setMonths] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -63,15 +91,15 @@ export default function App() {
     }
   }, [startMonth, startYear]);
 
-  useEffect(() => {
-    fetchCalendarWithTimestamp();
-  }, [fetchCalendarWithTimestamp]);
-
   // update lastFetch timestamp when calendar is fetched
   const fetchCalendarWithTimestamp = useCallback(async () => {
     await fetchCalendar();
     setLastFetch(Date.now());
   }, [fetchCalendar]);
+
+  useEffect(() => {
+    fetchCalendarWithTimestamp();
+  }, [fetchCalendarWithTimestamp]);
 
   // Auto-reload polling
   useEffect(() => {
@@ -137,7 +165,7 @@ export default function App() {
         onNext={() => navigate(1)}
         onOpenSettings={() => setShowSettings(true)}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleSetActiveTab}
         reloadInterval={settings?.reload_interval}
         lastFetch={lastFetch}
       />

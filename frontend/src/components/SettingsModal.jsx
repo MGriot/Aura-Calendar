@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Upload, Eye, Check, AlertCircle, Sun, Moon } from 'lucide-react';
 
-export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
+export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, theme = 'dark', setTheme = () => {} }) {
   const [settings, setSettings] = useState({
     csv_path: '',
     col_start_date: 'start_date',
@@ -173,7 +173,7 @@ export default function SettingsModal({ onClose, onSaved, theme, setTheme }) {
                 <label className="field__label">Upload Local File</label>
                 <div 
                   className={`dropzone ${uploading ? 'dropzone--uploading' : ''}`}
-                  onClick={() => document.getElementById('file-upload').click()}
+                  onClick={() => { const el = document.getElementById('file-upload'); if (el) el.click(); }}
                 >
                   <input 
                     type="file" 

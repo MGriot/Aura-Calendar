@@ -35,3 +35,5 @@ backend/special_days.json
 backend/tags_config.json
 *.csv
 scratch/
+
+.github/
