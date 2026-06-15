@@ -98,6 +98,8 @@ class Settings(BaseModel):
     col_end_date: str = "end_date"
     col_event_name: str = "event_name"
     col_category: str = "category"
+    col_status: str = ""
+    col_type: str = ""
     date_format: str = "%Y-%m-%d"
     color_map: dict[str, str] = {} # { category_value: hex_color }
     reload_interval: int = 0 # in minutes, 0 = manual
@@ -284,6 +286,8 @@ def load_events_from_csv(settings: Settings) -> list:
                             "end_date": end.isoformat(),
                             "title": row.get(settings.col_event_name, "Untitled").strip(),
                             "category": row.get(settings.col_category, "default").strip(),
+                            "status": row.get(settings.col_status, "").strip() if settings.col_status else "",
+                            "type": row.get(settings.col_type, "").strip() if settings.col_type else "",
                             "data": {k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
                         }
                     )

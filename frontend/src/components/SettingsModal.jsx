@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { X, Upload, Eye, Check, AlertCircle, Sun, Moon } from 'lucide-react';
 
-export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, theme = 'dark', setTheme = () => {} }) {
+export default function SettingsModal({ onClose = () => { }, onSaved = () => { }, theme = 'dark', setTheme = () => { } }) {
   const [settings, setSettings] = useState({
     csv_path: '',
     col_start_date: 'start_date',
     col_end_date: 'end_date',
     col_event_name: 'event_name',
     col_category: 'category',
+    col_status: '',
+    col_type: '',
     date_format: '%Y-%m-%d',
     color_map: {},
     enable_advanced_calendar: false,
@@ -30,8 +32,15 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
     fetch('/api/settings')
       .then((r) => r.json())
       .then((data) => setSettings(prev => ({ ...prev, ...data })))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
+
+  // If settings contain an external_url, clear any internal csv_path to avoid showing an outdated internal path
+  useEffect(() => {
+    if (settings.external_url && settings.csv_path) {
+      update('csv_path', '');
+    }
+  }, [settings.external_url]);
 
   // Auto-preview when a CSV is already configured (either internal path or external URL)
   useEffect(() => {
@@ -47,11 +56,11 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
     if (preview.length > 0 && settings.col_category) {
       const cats = Array.from(new Set(preview.map(row => row[settings.col_category]).filter(Boolean)));
       setUniqueCategories(cats);
-      
+
       const newMap = { ...settings.color_map };
       let changed = false;
       const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
-      
+
       cats.forEach((cat, i) => {
         if (!newMap[cat]) {
           newMap[cat] = palette[i % palette.length];
@@ -122,11 +131,11 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
         body: JSON.stringify(settings),
       });
       const data = await res.json();
-      
-      const eventMsg = settings.csv_path 
+
+      const eventMsg = settings.csv_path
         ? `${data.events_loaded} events loaded.`
         : 'Settings updated (No CSV linked).';
-        
+
       setStatus({
         type: 'success',
         msg: `Configuration Saved! ${eventMsg}`,
@@ -168,18 +177,18 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
             {/* Column 1: Sources */}
             <div className="settings-section">
               <h3 className="section-title">Data Source</h3>
-              
+
               <div className="field">
                 <label className="field__label">Upload Local File</label>
-                <div 
+                <div
                   className={`dropzone ${uploading ? 'dropzone--uploading' : ''}`}
                   onClick={() => { const el = document.getElementById('file-upload'); if (el) el.click(); }}
                 >
-                  <input 
-                    type="file" 
-                    id="file-upload" 
-                    hidden 
-                    accept=".csv" 
+                  <input
+                    type="file"
+                    id="file-upload"
+                    hidden
+                    accept=".csv"
                     onChange={handleFileUpload}
                   />
                   <Upload size={24} />
@@ -193,7 +202,12 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                   className="field__input"
                   type="text"
                   value={settings.external_url}
-                  onChange={(e) => update('external_url', e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update('external_url', v);
+                    // If user provides an external URL/host path, clear any internal csv_path to avoid confusion
+                    if (v) update('csv_path', '');
+                  }}
                   placeholder="https://... or C:\path\to\file.csv"
                   id="input-external-url"
                 />
@@ -246,7 +260,7 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                 />
                 <span className="field__hint">Use {"{{field_name}}"} to inject event fields. Basic Markdown supported: **bold**, *italic*, <code>code</code>.</span>
               </div>
-              
+
               <div className="field">
                 <label className="field__label">Auto-Reload Frequency</label>
                 <select
@@ -264,7 +278,7 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
               </div>
             </div>
           </div>
-          
+
           <fieldset className="fieldset">
             <legend className="fieldset__legend">Calendar Metadata Components</legend>
             <div className="cultural-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -280,12 +294,12 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                 { id: 'lunar', label: 'Lunar Dates (L:M/D)' },
               ].map(cal => (
                 <label key={cal.id} className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={(settings.enabled_cultural_calendars || []).includes(cal.id)}
                     onChange={(e) => {
                       const current = settings.enabled_cultural_calendars || [];
-                      const next = e.target.checked 
+                      const next = e.target.checked
                         ? [...current, cal.id]
                         : current.filter(id => id !== cal.id);
                       update('enabled_cultural_calendars', next);
@@ -296,11 +310,11 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                 </label>
               ))}
             </div>
-            
+
             <div className="field" style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
               <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={settings.show_special_days ?? true}
                   onChange={(e) => update('show_special_days', e.target.checked)}
                   style={{ width: '18px', height: '18px' }}
@@ -320,6 +334,8 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                   ['col_end_date', 'End Date Column (Optional)'],
                   ['col_event_name', 'Event Name to Display'],
                   ['col_category', 'Color Legend Column (Type/Category)'],
+                  ['col_status', 'Status Column (Optional)'],
+                  ['col_type', 'Type Column (Optional)'],
                 ].map(([key, label]) => (
                   <div className="field" key={key}>
                     <label className="field__label">{label}</label>
@@ -348,8 +364,8 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                 {uniqueCategories.map(cat => (
                   <div className="color-item" key={cat}>
                     <span className="color-item__label">{cat}</span>
-                    <input 
-                      type="color" 
+                    <input
+                      type="color"
                       className="color-item__input"
                       value={settings.color_map[cat] || '#3b82f6'}
                       onChange={(e) => {

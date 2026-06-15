@@ -1,11 +1,11 @@
 import { X, Calendar as CalendarIcon, MapPin, Tag, CheckCircle } from 'lucide-react';
 
-export default function DayDetailsModal({ 
+export default function DayDetailsModal({
   day, tagsConfig, onClose, colorMap, eventTemplate
 }) {
   if (!day) return null;
   const { date, events = [], advanced, special_tags: specialTags, where: locations } = day;
-  
+
   // Use unified metadata if available, or fallback to day fields
   const fiscalMonth = day.fiscal_month || advanced?.fiscal_month;
   const fiscalWeek = day.week_of_month || advanced?.fiscal_week;
@@ -41,10 +41,10 @@ export default function DayDetailsModal({
               {day?.tier3?.cultural && day.tier3.cultural.length > 0 && (
                 <div className="cultural-metadata" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {day.tier3.cultural.map((c, i) => (
-                    <div key={i} style={{ 
-                      fontSize: '0.7rem', 
-                      padding: '4px 8px', 
-                      borderRadius: '12px', 
+                    <div key={i} style={{
+                      fontSize: '0.7rem',
+                      padding: '4px 8px',
+                      borderRadius: '12px',
                       backgroundColor: '#f0f4f8',
                       color: '#4a5568',
                       border: '1px solid #e2e8f0',
@@ -100,7 +100,7 @@ export default function DayDetailsModal({
                   // replace {{field}} tokens
                   out = out.replace(/{{\s*([^}]+)\s*}}/g, (m, p1) => {
                     const key = p1.trim();
-                    return (obj[key] ?? (obj.data && obj.data[key]) ?? '') ;
+                    return (obj[key] ?? (obj.data && obj.data[key]) ?? '');
                   });
                   // minimal markdown -> html
                   out = out
@@ -123,7 +123,7 @@ export default function DayDetailsModal({
                           {ev.category}
                         </span>
                       </div>
-                       
+
                       <div className="day-event-card__details">
                         <div className="detail-item">
                           <Tag size={14} />
@@ -135,10 +135,12 @@ export default function DayDetailsModal({
                             <span>{ev.place}</span>
                           </div>
                         )}
-                        <div className="detail-item">
-                          <CheckCircle size={14} />
-                          <span>{ev.status || 'Confirmed'}</span>
-                        </div>
+                        {ev.status && (
+                          <div className="detail-item">
+                            <CheckCircle size={14} />
+                            <span>{ev.status}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="day-event-card__time">

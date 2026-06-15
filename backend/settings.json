@@ -1,10 +1,12 @@
 {
-  "csv_path": "/app/uploads/test_sample.csv",
+  "csv_path": "/app/uploads/test_events.csv",
   "external_url": "",
   "col_start_date": "start_date",
   "col_end_date": "end_date",
-  "col_event_name": "event_name",
-  "col_category": "category",
+  "col_event_name": "activity",
+  "col_category": "type",
+  "col_status": "status",
+  "col_type": "",
   "date_format": "%Y-%m-%d",
   "color_map": {
     "Meeting": "#3b82f6",
@@ -31,5 +33,5 @@
     "holidays_cz",
     "chinese"
   ],
-  "event_card_template": "**{{title}}**\nCategory: {{category}}\nFrom: {{start_date}}\nTo: {{end_date}}"
+  "event_card_template": "Category: {{category}}\nFrom: {{start_date}}\nTo: {{end_date}}\nStatus: {{status}}"
 }
