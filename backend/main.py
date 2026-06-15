@@ -326,7 +326,6 @@ def preview_csv(path: str):
             r = requests.get(path, timeout=15)
             r.raise_for_status()
             text = r.text
-            reader = csv.DictReader(io.StringIO(text))
         else:
             if not os.path.exists(path):
                 # Try resolving relative to backend dir
@@ -334,9 +333,11 @@ def preview_csv(path: str):
                     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
                 if not os.path.exists(path):
                     raise HTTPException(404, detail=f"File not found: {path}")
+            # load into memory to avoid file-handle races
             with open(path, "r", encoding="utf-8-sig") as f:
-                reader = csv.DictReader(f)
+                text = f.read()
 
+        reader = csv.DictReader(io.StringIO(text))
         headers = reader.fieldnames or []
         preview_rows = []
         for i, row in enumerate(reader):
