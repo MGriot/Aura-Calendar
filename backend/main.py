@@ -9,6 +9,8 @@ import sys
 import shutil
 import io
 import requests
+import time
+import tempfile
 from dateutil.parser import parse as dateutil_parse
 
 # Add root and src to sys.path to allow importing from src and internal imports within src
@@ -43,16 +45,30 @@ if not os.path.exists(UPLOAD_DIR):
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Upload a CSV file and return its local path."""
+    """Upload a CSV file and return its local path. Writes atomically to avoid race conditions."""
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, detail="Only CSV files are allowed.")
-    
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    tmp_path = None
     try:
-        with open(file_path, "wb") as buffer:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=UPLOAD_DIR, prefix="upload-", suffix=".tmp")
+        os.close(fd)
+        with open(tmp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        return {"status": "ok", "path": os.path.abspath(file_path), "filename": file.filename}
+            buffer.flush()
+            try:
+                os.fsync(buffer.fileno())
+            except Exception:
+                pass
+        final_path = os.path.join(UPLOAD_DIR, file.filename)
+        os.replace(tmp_path, final_path)
+        return {"status": "ok", "path": os.path.abspath(final_path), "filename": file.filename}
     except Exception as e:
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
         raise HTTPException(500, detail=str(e))
 
 # ... (other endpoints)
@@ -217,13 +233,27 @@ def load_events_from_csv(settings: Settings) -> list:
 
     events = []
     try:
+        # Load CSV content into memory (avoids 'I/O operation on closed file' when using DictReader on file objects)
         if path.lower().startswith("http://") or path.lower().startswith("https://"):
             r = requests.get(path, timeout=15)
             r.raise_for_status()
-            reader = csv.DictReader(io.StringIO(r.text))
+            text = r.text
         else:
-            with open(path, "r", encoding="utf-8-sig") as f:
-                reader = csv.DictReader(f)
+            # Try a few times in case the file is still being written by an uploader
+            attempts = 3
+            text = None
+            for attempt in range(attempts):
+                try:
+                    with open(path, "r", encoding="utf-8-sig") as f:
+                        text = f.read()
+                    break
+                except Exception as e:
+                    if attempt < attempts - 1:
+                        time.sleep(0.2)
+                        continue
+                    else:
+                        raise
+        reader = csv.DictReader(io.StringIO(text))
         for row in reader:
                 try:
                     start_val = row.get(settings.col_start_date, "").strip()
