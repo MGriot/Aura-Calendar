@@ -28,6 +28,7 @@ export default function WeekView({ onDayClick, startYear, startMonth, startDay, 
   );
 
   const showSpecial = settings?.show_special_days ?? true;
+  const colorMap = settings?.color_map || {};
 
   return (
     <div className="week-view">
@@ -88,7 +89,7 @@ export default function WeekView({ onDayClick, startYear, startMonth, startDay, 
                   <div 
                     key={i} 
                     className="week-event"
-                    style={{ borderLeftColor: `var(--accent-${ev.category === 'default' ? 'blue' : 'purple'})` }}
+                    style={{ borderLeftColor: colorMap[ev.category] || '#3b82f6' }}
                   >
                     <span className="week-event__title">{ev.title}</span>
                     <span className="week-event__cat">{ev.category}</span>

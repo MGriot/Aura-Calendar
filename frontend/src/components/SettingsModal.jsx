@@ -91,7 +91,7 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
   };
 
   const previewCSV = async () => {
-    const path = settings.csv_path || settings.external_url;
+    const path = settings.external_url || settings.csv_path;
     if (!path) return;
     setStatus(null);
     try {
@@ -244,7 +244,7 @@ export default function SettingsModal({ onClose = () => {}, onSaved = () => {}, 
                   placeholder={'**{{title}}**\nCategory: {{category}}\nFrom: {{start_date}}'}
                   id="input-event-template"
                 />
-                <span className="field__hint">Use {{field_name}} to inject event fields. Basic Markdown supported: **bold**, *italic*, `code`.</span>
+                <span className="field__hint">Use {"{{field_name}}"} to inject event fields. Basic Markdown supported: **bold**, *italic*, <code>code</code>.</span>
               </div>
               
               <div className="field">

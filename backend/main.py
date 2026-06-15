@@ -203,13 +203,18 @@ def try_parse_date(val: str, primary_fmt: str) -> datetime.date:
     fallbacks = [
         "%Y-%m-%d",
         "%Y/%m/%d",
+        "%Y.%m.%d",
         "%d-%m-%Y",
         "%d/%m/%Y",
+        "%d.%m.%Y",
         "%m/%d/%Y",
         "%d-%m-%y",
         "%d/%m/%y",
+        "%d.%m.%y",
         "%m/%d/%y",
         "%y-%m-%d",
+        "%y/%m/%d",
+        "%y.%m.%d",
     ]
     for fmt in fallbacks:
         try:
@@ -225,7 +230,7 @@ def try_parse_date(val: str, primary_fmt: str) -> datetime.date:
         raise ValueError(f"Unrecognized date format: {val}")
 
 def load_events_from_csv(settings: Settings) -> list:
-    path = settings.csv_path
+    path = settings.external_url.strip() if settings.external_url else settings.csv_path
     if not path:
         return []
     
@@ -520,7 +525,7 @@ def get_settings():
 @app.post("/api/settings")
 def update_settings(settings: Settings):
     save_settings_to_disk(settings)
-    count = len(load_events_from_csv(settings)) if settings.csv_path else 0
+    count = len(load_events_from_csv(settings)) if (settings.csv_path or settings.external_url) else 0
     return {"status": "ok", "events_loaded": count, "settings": settings}
 
 
