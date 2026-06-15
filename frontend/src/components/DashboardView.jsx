@@ -4,6 +4,7 @@ import { Calendar, Tag, Clock, Activity } from 'lucide-react';
 export default function DashboardView() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const colorMap = {}; // fallback to avoid crash when no settings provided
 
   useEffect(() => {
     fetch('/api/stats')
