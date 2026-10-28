@@ -43,6 +43,16 @@ TAGS_FILE = os.path.join(current_dir, "tags_config.json")
 SPECIAL_DAYS_FILE = os.path.join(current_dir, "special_days.json")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Local CSVs may only be read from these directories (extend with CSV_ALLOWED_DIRS, os.pathsep-separated)
+CSV_ALLOWED_DIRS = [
+    os.path.realpath(d)
+    for d in [UPLOAD_DIR, os.path.join(os.path.dirname(current_dir), "data"), "/data",
+              *filter(None, os.environ.get("CSV_ALLOWED_DIRS", "").split(os.pathsep))]
+]
+
+# Browser origins allowed to call the API directly (the UI itself goes through the same-origin proxy)
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
+
 
 # ── Models ────────────────────────────────────────────────
 class Settings(BaseModel):
@@ -167,15 +177,33 @@ def is_url(path: str) -> bool:
     return path.lower().startswith(("http://", "https://"))
 
 
+def resolve_local_csv(path: str) -> str:
+    """Resolve a local CSV path (relative paths resolve against the backend dir) and make sure it
+    lives inside CSV_ALLOWED_DIRS. Raises PermissionError otherwise."""
+    if not os.path.isabs(path):
+        path = os.path.join(current_dir, path)
+    real = os.path.realpath(path)
+    if not real.lower().endswith(".csv"):
+        raise PermissionError("Only .csv files can be read")
+    for root in CSV_ALLOWED_DIRS:
+        try:
+            if os.path.commonpath([real, root]) == root:
+                return real
+        except ValueError:  # different drives on Windows
+            continue
+    raise PermissionError(f"Path is outside the allowed CSV directories: {path}")
+
+
 def read_csv_text(path: str) -> str:
-    """Return the CSV content of a remote URL or a local path (relative paths resolve against the backend dir).
-    Raises FileNotFoundError when a local file does not exist."""
+    """Return the CSV content of an http(s) URL or an allowed local path.
+    Raises FileNotFoundError when a local file does not exist and PermissionError when it is not allowed."""
     if is_url(path):
-        r = requests.get(path, timeout=15)
+        r = requests.get(path, timeout=15, allow_redirects=False)
         r.raise_for_status()
         return r.text
-    if not os.path.isabs(path) and not os.path.exists(path):
-        path = os.path.join(current_dir, path)
+    if "://" in path:
+        raise PermissionError("Only http(s) URLs are supported")
+    path = resolve_local_csv(path)
     if not os.path.exists(path):
         raise FileNotFoundError(path)
     # Try a few times in case the file is still being written by an uploader
@@ -343,10 +371,10 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Calendar API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -476,7 +504,9 @@ def health():
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Upload a CSV file and return its local path. Writes atomically to avoid race conditions."""
-    if not file.filename.endswith(".csv"):
+    # Keep only the base name so "../../x.csv" can't escape UPLOAD_DIR
+    filename = os.path.basename((file.filename or "").replace("\\", "/"))
+    if not filename.lower().endswith(".csv") or filename.startswith("."):
         raise HTTPException(400, detail="Only CSV files are allowed.")
     tmp_path = None
     try:
@@ -487,7 +517,7 @@ async def upload_file(file: UploadFile = File(...)):
             buffer.flush()
             with contextlib.suppress(OSError):
                 os.fsync(buffer.fileno())
-        final_path = os.path.join(UPLOAD_DIR, file.filename)
+        final_path = os.path.join(UPLOAD_DIR, filename)
         os.replace(tmp_path, final_path)
         # Update settings to point to the uploaded CSV so UI shows it in Settings
         try:
@@ -497,7 +527,7 @@ async def upload_file(file: UploadFile = File(...)):
         except Exception as e:
             print(f"Warning: failed to persist csv_path to settings: {e}")
         await store.refresh()
-        return {"status": "ok", "path": os.path.abspath(final_path), "filename": file.filename}
+        return {"status": "ok", "path": os.path.abspath(final_path), "filename": filename}
     except Exception as e:
         if tmp_path and os.path.exists(tmp_path):
             with contextlib.suppress(OSError):
@@ -509,10 +539,12 @@ async def upload_file(file: UploadFile = File(...)):
 def preview_csv(path: str):
     """Read first few rows of a CSV to help with mapping.
 
-    Supports local file paths and remote URLs. Remote files are streamed and not persisted.
+    Supports local CSVs inside CSV_ALLOWED_DIRS and http(s) URLs. Remote files are streamed and not persisted.
     """
     try:
         text = read_csv_text(path)
+    except PermissionError as e:
+        raise HTTPException(403, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(404, detail=f"File not found: {e}")
     except Exception as e:
