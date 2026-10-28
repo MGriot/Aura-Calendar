@@ -2,19 +2,20 @@ import { useEffect, useState } from 'react';
 import { Calendar, Tag, Clock, Activity } from 'lucide-react';
 import { getCategoryColor } from '../utils/colors.js';
 
-export default function DashboardView({ settings }) {
+export default function DashboardView({ settings, version }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (version === null) return;
     fetch('/api/stats')
       .then(r => r.json())
       .then(data => setStats(data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [version]);
 
-  if (loading) return (
+  if (loading && !stats) return (
     <div className="view-placeholder">
       <div className="loader-spinner" />
     </div>

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { getCategoryColor } from '../utils/colors.js';
 
-export default function WeekView({ onDayClick, startYear, startMonth, startDay, settings, tagsConfig }) {
+export default function WeekView({ onDayClick, startYear, startMonth, startDay, settings, tagsConfig, version }) {
   const [week, setWeek] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (version === null) return;
     setLoading(true);
     // Fetch the week containing the anchor day (defaults provided by App)
     const dayParam = typeof startDay !== 'undefined' ? startDay : 1;
@@ -14,9 +15,9 @@ export default function WeekView({ onDayClick, startYear, startMonth, startDay, 
       .then(data => setWeek(data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [startYear, startMonth, startDay]);
+  }, [startYear, startMonth, startDay, version]);
 
-  if (loading) return (
+  if (loading && !week) return (
     <div className="view-placeholder">
       <div className="loader-spinner" />
     </div>

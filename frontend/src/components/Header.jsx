@@ -1,4 +1,4 @@
-import { Calendar, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, RefreshCw, Settings } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 
@@ -10,18 +10,18 @@ export default function Header({
   activeTab,
   setActiveTab,
   reloadInterval,
-  lastFetch,
+  nextRefresh, // epoch seconds of the backend's next scheduled refresh
+  onRefresh,
 }) {
   const [countdown, setCountdown] = useState('');
 
   useEffect(() => {
-    if (!reloadInterval || !lastFetch) {
+    if (!reloadInterval || !nextRefresh) {
       setCountdown('');
       return;
     }
-    const ms = reloadInterval * 60 * 1000;
     const update = () => {
-      const diff = ms - (Date.now() - lastFetch);
+      const diff = nextRefresh * 1000 - Date.now();
       if (diff <= 0) {
         setCountdown('Updating…');
         return;
@@ -34,7 +34,7 @@ export default function Header({
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [reloadInterval, lastFetch]);
+  }, [reloadInterval, nextRefresh]);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
@@ -92,6 +92,16 @@ export default function Header({
             <small style={{ fontSize: '0.8rem' }}>Auto: {countdown || '—'}</small>
           </div>
         )}
+
+        <button
+          className="settings-btn"
+          onClick={onRefresh}
+          aria-label="Refresh data now"
+          title="Refresh data now"
+          id="refresh-btn"
+        >
+          <RefreshCw size={16} />
+        </button>
 
         <button
           className="settings-btn"
