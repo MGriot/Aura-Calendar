@@ -18,8 +18,6 @@ yarn-debug.log*
 yarn-error.log*
 .eslintcache
 
-# Docker
-.dockerignore
 # Exclude actual .env but keep example
 .env
 !.env.example

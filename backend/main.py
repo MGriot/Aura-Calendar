@@ -1,22 +1,27 @@
 """Calendar API — lightweight FastAPI backend."""
 
+import asyncio
 import calendar
+import contextlib
 import csv
 import datetime
+import functools
+import hashlib
+import io
 import json
 import os
-import sys
 import shutil
-import io
-import requests
-import time
+import sys
 import tempfile
+import time
+
+import requests
 from dateutil.parser import parse as dateutil_parse
 
 # Add root and src to sys.path to allow importing from src and internal imports within src
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # Check if src is a subdirectory (Docker mount) or sibling (Local)
-if os.path.exists(os.path.join(current_dir, "src")):
+if os.path.exists(os.path.join(current_dir, "src", "calendar_utils.py")):
     sys.path.append(current_dir)
     sys.path.append(os.path.join(current_dir, "src"))
 else:
@@ -25,69 +30,28 @@ else:
 
 from fastapi import FastAPI, Query, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import holidays
-from convertdate import hebrew, islamic
-from lunarcalendar import Converter, Solar
 
 # Import from mounted src
 from src.calendar_utils import HolidayProvider
 from src.calendar_generator import generate_calendar_table
 
-app = FastAPI(title="Calendar API", version="1.0.0")
-# ... (rest of imports and app setup)
+UPLOAD_DIR = os.path.join(current_dir, "uploads")
+SETTINGS_FILE = os.path.join(current_dir, "settings.json")
+TAGS_FILE = os.path.join(current_dir, "tags_config.json")
+SPECIAL_DAYS_FILE = os.path.join(current_dir, "special_days.json")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
+# Local CSVs may only be read from these directories (extend with CSV_ALLOWED_DIRS, os.pathsep-separated)
+CSV_ALLOWED_DIRS = [
+    os.path.realpath(d)
+    for d in [UPLOAD_DIR, os.path.join(os.path.dirname(current_dir), "data"), "/data",
+              *filter(None, os.environ.get("CSV_ALLOWED_DIRS", "").split(os.pathsep))]
+]
 
-# ... (models and helper functions)
-
-@app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Upload a CSV file and return its local path. Writes atomically to avoid race conditions."""
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(400, detail="Only CSV files are allowed.")
-    tmp_path = None
-    try:
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=UPLOAD_DIR, prefix="upload-", suffix=".tmp")
-        os.close(fd)
-        with open(tmp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            buffer.flush()
-            try:
-                os.fsync(buffer.fileno())
-            except Exception:
-                pass
-        final_path = os.path.join(UPLOAD_DIR, file.filename)
-        os.replace(tmp_path, final_path)
-        # Update settings to point to the uploaded CSV so UI shows it in Settings
-        try:
-            s = load_settings()
-            s.csv_path = os.path.abspath(final_path)
-            save_settings_to_disk(s)
-        except Exception as e:
-            print(f"Warning: failed to persist csv_path to settings: {e}")
-        return {"status": "ok", "path": os.path.abspath(final_path), "filename": file.filename}
-    except Exception as e:
-        try:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except Exception:
-            pass
-        raise HTTPException(500, detail=str(e))
-
-# ... (other endpoints)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
+# Browser origins allowed to call the API directly (the UI itself goes through the same-origin proxy)
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
 
 
 # ── Models ────────────────────────────────────────────────
@@ -157,10 +121,6 @@ def save_settings_to_disk(settings: Settings):
         json.dump(settings.model_dump(), f, indent=2)
 
 
-TAGS_FILE = os.path.join(os.path.dirname(__file__), "tags_config.json")
-SPECIAL_DAYS_FILE = os.path.join(os.path.dirname(__file__), "special_days.json")
-
-
 def load_tags_config() -> TagsConfig:
     if os.path.exists(TAGS_FILE):
         with open(TAGS_FILE, "r") as f:
@@ -187,6 +147,13 @@ def save_special_days(days: list[SpecialDay]):
 
 
 # ── CSV event loader ──────────────────────────────────────
+DATE_FALLBACKS = [
+    "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d",
+    "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y", "%m/%d/%Y",
+    "%d-%m-%y", "%d/%m/%y", "%d.%m.%y", "%m/%d/%y",
+    "%y-%m-%d", "%y/%m/%d", "%y.%m.%d",
+]
+
 
 def try_parse_date(val: str, primary_fmt: str) -> datetime.date:
     """Try parsing a date string using the configured primary format first, then a set of common fallbacks.
@@ -194,110 +161,221 @@ def try_parse_date(val: str, primary_fmt: str) -> datetime.date:
     """
     if not val:
         raise ValueError("Empty date")
-
-    # Try primary format first (keeps existing behavior when user specifies a specific format)
-    try:
-        return datetime.datetime.strptime(val, primary_fmt).date()
-    except Exception:
-        pass
-
-    # Common fallbacks (two/ four digit years, different separators)
-    fallbacks = [
-        "%Y-%m-%d",
-        "%Y/%m/%d",
-        "%Y.%m.%d",
-        "%d-%m-%Y",
-        "%d/%m/%Y",
-        "%d.%m.%Y",
-        "%m/%d/%Y",
-        "%d-%m-%y",
-        "%d/%m/%y",
-        "%d.%m.%y",
-        "%m/%d/%y",
-        "%y-%m-%d",
-        "%y/%m/%d",
-        "%y.%m.%d",
-    ]
-    for fmt in fallbacks:
+    for fmt in [primary_fmt, *DATE_FALLBACKS]:
         try:
             return datetime.datetime.strptime(val, fmt).date()
-        except Exception:
+        except ValueError:
             continue
-
     # Last resort: use dateutil's parse which handles many human formats
     try:
-        dt = dateutil_parse(val, dayfirst=True)
-        return dt.date()
-    except Exception as e:
+        return dateutil_parse(val, dayfirst=True).date()
+    except Exception:
         raise ValueError(f"Unrecognized date format: {val}")
+
+
+def is_url(path: str) -> bool:
+    return path.lower().startswith(("http://", "https://"))
+
+
+def resolve_local_csv(path: str) -> str:
+    """Resolve a local CSV path (relative paths resolve against the backend dir) and make sure it
+    lives inside CSV_ALLOWED_DIRS. Raises PermissionError otherwise."""
+    if not os.path.isabs(path):
+        path = os.path.join(current_dir, path)
+    real = os.path.realpath(path)
+    if not real.lower().endswith(".csv"):
+        raise PermissionError("Only .csv files can be read")
+    for root in CSV_ALLOWED_DIRS:
+        try:
+            if os.path.commonpath([real, root]) == root:
+                return real
+        except ValueError:  # different drives on Windows
+            continue
+    raise PermissionError(f"Path is outside the allowed CSV directories: {path}")
+
+
+def read_csv_text(path: str) -> str:
+    """Return the CSV content of an http(s) URL or an allowed local path.
+    Raises FileNotFoundError when a local file does not exist and PermissionError when it is not allowed."""
+    if is_url(path):
+        r = requests.get(path, timeout=15, allow_redirects=False)
+        r.raise_for_status()
+        return r.text
+    if "://" in path:
+        raise PermissionError("Only http(s) URLs are supported")
+    path = resolve_local_csv(path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+    # Try a few times in case the file is still being written by an uploader
+    for attempt in range(3):
+        try:
+            with open(path, "r", encoding="utf-8-sig") as f:
+                return f.read()
+        except OSError:
+            if attempt == 2:
+                raise
+            time.sleep(0.2)
+
+
+def parse_events(text: str, settings: Settings) -> list:
+    events = []
+    for row in csv.DictReader(io.StringIO(text)):
+        try:
+            start_val = (row.get(settings.col_start_date) or "").strip()
+            if not start_val:
+                continue
+            start = try_parse_date(start_val, settings.date_format)
+            end_raw = (row.get(settings.col_end_date) or "").strip()
+            end = try_parse_date(end_raw, settings.date_format) if end_raw else start
+            events.append(
+                {
+                    "start_date": start.isoformat(),
+                    "end_date": end.isoformat(),
+                    "title": (row.get(settings.col_event_name) or "Untitled").strip(),
+                    "category": (row.get(settings.col_category) or "default").strip(),
+                    "status": (row.get(settings.col_status) or "").strip() if settings.col_status else "",
+                    "type": (row.get(settings.col_type) or "").strip() if settings.col_type else "",
+                    "data": {k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
+                }
+            )
+        except ValueError:
+            continue
+    return events
+
+
+def index_events_by_date(events: list) -> dict[str, list]:
+    """Map ISO date -> list of event slices covering that date."""
+    by_date: dict[str, list] = {}
+    for ev in events:
+        start = datetime.date.fromisoformat(ev["start_date"])
+        end = datetime.date.fromisoformat(ev["end_date"])
+        cur = start
+        while cur <= end:
+            by_date.setdefault(cur.isoformat(), []).append(
+                {**ev, "is_start": cur == start, "is_end": cur == end}
+            )
+            cur += datetime.timedelta(days=1)
+    return by_date
+
 
 def load_events_from_csv(settings: Settings) -> list:
     path = settings.external_url.strip() if settings.external_url else settings.csv_path
     if not path:
         return []
-    
-    # If path is a remote URL, we'll stream it; otherwise resolve local paths relative to backend dir
-    if path.lower().startswith("http://") or path.lower().startswith("https://"):
-        # remote URL — skip local existence check
-        pass
-    else:
-        # Resolve relative paths relative to current dir (where main.py is)
-        if not os.path.isabs(path):
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
-        if not os.path.exists(path):
-            print(f"ERROR: CSV path not found: {path}")
-            return []
-
-    events = []
     try:
-        # Load CSV content into memory (avoids 'I/O operation on closed file' when using DictReader on file objects)
-        if path.lower().startswith("http://") or path.lower().startswith("https://"):
-            r = requests.get(path, timeout=15)
-            r.raise_for_status()
-            text = r.text
-        else:
-            # Try a few times in case the file is still being written by an uploader
-            attempts = 3
-            text = None
-            for attempt in range(attempts):
-                try:
-                    with open(path, "r", encoding="utf-8-sig") as f:
-                        text = f.read()
-                    break
-                except Exception as e:
-                    if attempt < attempts - 1:
-                        time.sleep(0.2)
-                        continue
-                    else:
-                        raise
-        reader = csv.DictReader(io.StringIO(text))
-        for row in reader:
-                try:
-                    start_val = row.get(settings.col_start_date, "").strip()
-                    if not start_val: continue
-                    
-                    start = try_parse_date(start_val, settings.date_format)
-                    
-                    end_raw = row.get(settings.col_end_date, "").strip()
-                    end = (try_parse_date(end_raw, settings.date_format) if end_raw else start)
-                    events.append(
-                        {
-                            "start_date": start.isoformat(),
-                            "end_date": end.isoformat(),
-                            "title": row.get(settings.col_event_name, "Untitled").strip(),
-                            "category": row.get(settings.col_category, "default").strip(),
-                            "status": row.get(settings.col_status, "").strip() if settings.col_status else "",
-                            "type": row.get(settings.col_type, "").strip() if settings.col_type else "",
-                            "data": {k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
-                        }
-                    )
-                except (KeyError, ValueError) as e:
-                    # print(f"DEBUG: skip row due to {e}")
-                    continue
+        return parse_events(read_csv_text(path), settings)
     except Exception as e:
         print(f"ERROR: Failed to read CSV {path}: {e}")
         return []
-    return events
+
+
+# ── Event store (cached data + scheduled refresh) ─────────
+class EventStore:
+    """Caches parsed events and refreshes them every `reload_interval` minutes.
+
+    Every refresh that changes the data bumps `version` and is pushed to SSE subscribers,
+    so all connected UIs reload at the same moment the backend does.
+    """
+
+    def __init__(self):
+        self.events: list = []
+        self.by_date: dict[str, list] = {}
+        self.version = ""
+        self.last_refresh: float | None = None
+        self.next_refresh: float | None = None
+        self._revision = 0  # bumped by local edits (special days, tags) that don't touch the CSV
+        self._data_hash = ""
+        self._lock = asyncio.Lock()
+        self._wake = asyncio.Event()
+        self._subscribers: set[asyncio.Queue] = set()
+
+    def snapshot(self) -> dict:
+        settings = load_settings()
+        return {
+            "version": self.version,
+            "last_refresh": self.last_refresh,
+            "next_refresh": self.next_refresh,
+            "interval": settings.reload_interval,
+        }
+
+    def _set_version(self):
+        new_version = hashlib.sha1(f"{self._data_hash}:{self._revision}".encode()).hexdigest()[:12]
+        changed = new_version != self.version
+        self.version = new_version
+        return changed
+
+    async def refresh(self) -> bool:
+        """Reload events from the configured source. Returns True when the data changed."""
+        async with self._lock:
+            settings = load_settings()
+            events = await asyncio.to_thread(load_events_from_csv, settings)
+            payload = json.dumps([events, settings.model_dump()], sort_keys=True, default=str)
+            self._data_hash = hashlib.sha1(payload.encode()).hexdigest()
+            self.events = events
+            self.by_date = index_events_by_date(events)
+            self.last_refresh = time.time()
+            interval = settings.reload_interval
+            self.next_refresh = self.last_refresh + interval * 60 if interval > 0 else None
+            changed = self._set_version()
+        self._notify()
+        return changed
+
+    def bump(self):
+        """Signal a local data change (special days/tags) so other open UIs reload."""
+        self._revision += 1
+        self._set_version()
+        self._notify()
+
+    def reschedule(self):
+        """Wake the scheduler so a new interval takes effect immediately."""
+        self._wake.set()
+
+    def _notify(self):
+        message = self.snapshot()
+        for q in list(self._subscribers):
+            q.put_nowait(message)
+
+    async def run_scheduler(self):
+        while True:
+            timeout = self.next_refresh - time.time() if self.next_refresh else None
+            self._wake.clear()
+            try:
+                await asyncio.wait_for(self._wake.wait(), timeout=max(timeout, 0) if timeout is not None else None)
+            except asyncio.TimeoutError:
+                try:
+                    await self.refresh()
+                except Exception as e:
+                    print(f"Scheduled refresh failed: {e}")
+
+    @contextlib.contextmanager
+    def subscribe(self):
+        q: asyncio.Queue = asyncio.Queue()
+        self._subscribers.add(q)
+        try:
+            yield q
+        finally:
+            self._subscribers.discard(q)
+
+
+store = EventStore()
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await store.refresh()
+    task = asyncio.create_task(store.run_scheduler())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Calendar API", version="1.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 
 
 # ── Calendar generation (stdlib only) ─────────────────────
@@ -333,104 +411,186 @@ def generate_calendar_data(start_month: int, start_year: int, num_months: int):
     return months_data
 
 
-# ── CSV Preview ───────────────────────────────────────────
-@app.get("/api/csv/preview")
-def preview_csv(path: str):
-    """Read first few rows of a CSV to help with mapping.
+@functools.lru_cache(maxsize=32)
+def _advanced_data_cached(start_iso: str, end_iso: str, countries: tuple[str, ...]) -> dict:
+    import pandas as pd
+    advanced_map = {}
+    df = generate_calendar_table(start_iso, end_iso, freq="D", countries=list(countries), n_workers=1)
+    if df is None:
+        return advanced_map
 
-    Supports local file paths and remote URLs. Remote files are streamed and not persisted.
-    """
-    try:
-        if path.lower().startswith("http://") or path.lower().startswith("https://"):
-            # Stream remote CSV without saving to disk
-            r = requests.get(path, timeout=15)
-            r.raise_for_status()
-            text = r.text
-        else:
-            if not os.path.exists(path):
-                # Try resolving relative to backend dir
-                if not os.path.isabs(path):
-                    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
-                if not os.path.exists(path):
-                    raise HTTPException(404, detail=f"File not found: {path}")
-            # load into memory to avoid file-handle races
-            with open(path, "r", encoding="utf-8-sig") as f:
-                text = f.read()
+    def flag(rec, key, default=False):
+        return bool(rec.get(key)) if rec.get(key) is not None else default
 
-        reader = csv.DictReader(io.StringIO(text))
-        headers = reader.fieldnames or []
-        preview_rows = []
-        for i, row in enumerate(reader):
-            if i >= 5: break
-            preview_rows.append(row)
-        return {"headers": headers, "preview_rows": preview_rows}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    df = df.where(pd.notnull(df), None)
+    for rec in df.to_dict("records"):
+        d_key = rec.get('date_utc')
+        if hasattr(d_key, 'strftime'):
+            d_key = d_key.strftime('%Y-%m-%d')
+        if not d_key:
+            continue
+        advanced_map[d_key] = {
+            "fiscal_month": rec.get("ITTFiscalMonth"),
+            "fiscal_week": rec.get("ITTFiscalWeek"),
+            "is_fiscal_start": flag(rec, "is_first_day_of_fiscal_period"),
+            "is_fiscal_end": flag(rec, "is_last_day_of_fiscal_period"),
+            "week_of_month": rec.get("WeekOfMonth"),
+            "is_last_week_month": flag(rec, "IsLastWeekOfMonth"),
+            "season": rec.get("season_astronomical"),
+            "holidays": {c: rec.get(f"HolidayName_{c}") for c in countries if rec.get(f"HolidayName_{c}")},
+            "is_business": {c: flag(rec, f"IsBusinessDay_{c}", True) for c in countries},
+        }
+    return advanced_map
 
 
 def get_advanced_data(start_date: datetime.date, end_date: datetime.date, settings: Settings):
-    advanced_map = {}
-    if settings.enable_advanced_calendar:
-        try:
-            df = generate_calendar_table(
-                start_date.isoformat(), 
-                end_date.isoformat(), 
-                freq="D",
-                countries=settings.advanced_countries,
-                n_workers=1
-            )
-            
-            if df is not None:
-                import pandas as pd
-                df = df.where(pd.notnull(df), None)
-                records = df.to_dict("records")
-                for rec in records:
-                    d_key = rec.get('date_utc')
-                    if hasattr(d_key, 'strftime'):
-                        d_key = d_key.strftime('%Y-%m-%d')
-                    elif isinstance(d_key, datetime.date):
-                        d_key = d_key.isoformat()
-                    
-                    if d_key:
-                        adv = {
-                            "fiscal_month": rec.get("ITTFiscalMonth"),
-                            "fiscal_week": rec.get("ITTFiscalWeek"),
-                            "is_fiscal_start": bool(rec.get("is_first_day_of_fiscal_period")) if rec.get("is_first_day_of_fiscal_period") is not None else False,
-                            "is_fiscal_end": bool(rec.get("is_last_day_of_fiscal_period")) if rec.get("is_last_day_of_fiscal_period") is not None else False,
-                            "week_of_month": rec.get("WeekOfMonth"),
-                            "is_last_week_month": bool(rec.get("IsLastWeekOfMonth")) if rec.get("IsLastWeekOfMonth") is not None else False,
-                            "season": rec.get("season_astronomical"),
-                            "holidays": {
-                                c: rec.get(f"HolidayName_{c}") 
-                                for c in settings.advanced_countries 
-                                if rec.get(f"HolidayName_{c}")
-                            },
-                            "is_business": {
-                                c: bool(rec.get(f"IsBusinessDay_{c}")) if rec.get(f"IsBusinessDay_{c}") is not None else True
-                                for c in settings.advanced_countries
-                            }
-                        }
-                        advanced_map[d_key] = adv
-        except Exception as e:
-            print(f"Advanced calendar generation failed: {e}")
-    return advanced_map
+    if not settings.enable_advanced_calendar:
+        return {}
+    try:
+        return _advanced_data_cached(start_date.isoformat(), end_date.isoformat(), tuple(settings.advanced_countries))
+    except Exception as e:
+        print(f"Advanced calendar generation failed: {e}")
+        return {}
 
 
 def get_multicultural_map(start_date: datetime.date, end_date: datetime.date, settings: Settings):
     return HolidayProvider.get_holidays(
-        start_date, 
-        end_date, 
-        settings.advanced_countries, 
+        start_date,
+        end_date,
+        settings.advanced_countries,
         settings.enabled_cultural_calendars
     )
+
+
+class DayEnricher:
+    """Attaches tier1 (CSV events), tier2 (special days) and tier3 (cultural/advanced) data to day dicts."""
+
+    def __init__(self, start_date: datetime.date, end_date: datetime.date, settings: Settings, special_days: list[SpecialDay]):
+        self.abs_special = {d.date: d for d in special_days if not d.is_recurring and d.date}
+        self.rec_special = {(d.month, d.day): d for d in special_days if d.is_recurring and d.month and d.day}
+        self.advanced_map = get_advanced_data(start_date, end_date, settings)
+        self.multi_map = get_multicultural_map(start_date, end_date, settings)
+
+    def enrich(self, day: dict):
+        d_str = day["date"]
+        dt_obj = datetime.date.fromisoformat(d_str)
+
+        # Tier 1: CSV Events
+        day["tier1"] = store.by_date.get(d_str, [])
+        day["events"] = day["tier1"]  # legacy
+
+        # Tier 2: Special Days
+        sd = self.abs_special.get(d_str) or self.rec_special.get((dt_obj.month, dt_obj.day))
+        day["tier2"] = {
+            "tags": sd.tags if sd else [],
+            "where": sd.where if sd else [],
+            "is_recurring": sd.is_recurring if sd else False
+        }
+        day["special_tags"] = day["tier2"]["tags"]  # legacy
+        day["where"] = day["tier2"]["where"]  # legacy
+
+        # Tier 3: Unified Metadata
+        adv = self.advanced_map.get(d_str)
+        day["tier3"] = {"cultural": self.multi_map.get(d_str, []), "advanced": adv}
+        day["advanced"] = adv  # legacy
 
 
 # ── Endpoints ─────────────────────────────────────────────
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Upload a CSV file and return its local path. Writes atomically to avoid race conditions."""
+    # Keep only the base name so "../../x.csv" can't escape UPLOAD_DIR
+    filename = os.path.basename((file.filename or "").replace("\\", "/"))
+    if not filename.lower().endswith(".csv") or filename.startswith("."):
+        raise HTTPException(400, detail="Only CSV files are allowed.")
+    tmp_path = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=UPLOAD_DIR, prefix="upload-", suffix=".tmp")
+        os.close(fd)
+        with open(tmp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            buffer.flush()
+            with contextlib.suppress(OSError):
+                os.fsync(buffer.fileno())
+        final_path = os.path.join(UPLOAD_DIR, filename)
+        os.replace(tmp_path, final_path)
+        # Update settings to point to the uploaded CSV so UI shows it in Settings
+        try:
+            s = load_settings()
+            s.csv_path = os.path.abspath(final_path)
+            save_settings_to_disk(s)
+        except Exception as e:
+            print(f"Warning: failed to persist csv_path to settings: {e}")
+        await store.refresh()
+        return {"status": "ok", "path": os.path.abspath(final_path), "filename": filename}
+    except Exception as e:
+        if tmp_path and os.path.exists(tmp_path):
+            with contextlib.suppress(OSError):
+                os.remove(tmp_path)
+        raise HTTPException(500, detail=str(e))
+
+
+@app.get("/api/csv/preview")
+def preview_csv(path: str):
+    """Read first few rows of a CSV to help with mapping.
+
+    Supports local CSVs inside CSV_ALLOWED_DIRS and http(s) URLs. Remote files are streamed and not persisted.
+    """
+    try:
+        text = read_csv_text(path)
+    except PermissionError as e:
+        raise HTTPException(403, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(404, detail=f"File not found: {e}")
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
+    reader = csv.DictReader(io.StringIO(text))
+    headers = reader.fieldnames or []
+    preview_rows = []
+    for i, row in enumerate(reader):
+        if i >= 5:
+            break
+        preview_rows.append(row)
+    return {"headers": headers, "preview_rows": preview_rows}
+
+
+@app.get("/api/version")
+def get_version():
+    """Current data version and refresh schedule (epoch seconds)."""
+    return store.snapshot()
+
+
+@app.post("/api/refresh")
+async def force_refresh():
+    """Reload events now and restart the refresh timer."""
+    changed = await store.refresh()
+    store.reschedule()
+    return {**store.snapshot(), "changed": changed}
+
+
+@app.get("/api/events/stream")
+async def stream_events():
+    """Server-Sent Events: emits the store snapshot on connect and after every refresh."""
+    async def gen():
+        with store.subscribe() as q:
+            yield f"data: {json.dumps(store.snapshot())}\n\n"
+            while True:
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=25)
+                    yield f"data: {json.dumps(msg)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/calendar")
@@ -440,84 +600,26 @@ def get_calendar(
     num_months: int = Query(default=4, ge=1, le=12),
 ):
     data = generate_calendar_data(start_month, start_year, num_months)
-
     settings = load_settings()
-    events = load_events_from_csv(settings)
-    
     special_days = load_special_days()
-    tags_config = load_tags_config()
 
-    # Index events by date for O(1) lookup
-    by_date: dict[str, list] = {}
-    for ev in events:
-        cur = datetime.date.fromisoformat(ev["start_date"])
-        end = datetime.date.fromisoformat(ev["end_date"])
-        while cur <= end:
-            by_date.setdefault(cur.isoformat(), []).append(
-                {
-                    "title": ev["title"],
-                    "category": ev["category"],
-                    "is_start": cur == datetime.date.fromisoformat(ev["start_date"]),
-                    "is_end": cur == end,
-                }
-            )
-            cur += datetime.timedelta(days=1)
-            
-    # Index special days (both absolute and recurring)
-    special_days = load_special_days()
-    abs_special = {d.date: d for d in special_days if not d.is_recurring and d.date}
-    rec_special = {(d.month, d.day): d for d in special_days if d.is_recurring and d.month and d.day}
-
-    # Advanced calendar data
     start_date = datetime.date(start_year, start_month, 1)
-    # End date calculation
-    y, m = start_year, start_month
-    for _ in range(num_months):
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-    end_date = datetime.date(y, m, 1) - datetime.timedelta(days=1)
-    
-    advanced_map = get_advanced_data(start_date, end_date, settings)
-    multi_map = get_multicultural_map(start_date, end_date, settings)
-    
+    last = data[-1]
+    end_date = datetime.date(last["year"], last["month"], calendar.monthrange(last["year"], last["month"])[1])
+
+    enricher = DayEnricher(start_date, end_date, settings, special_days)
     for month in data:
         for week in month["weeks"]:
             for day in week["days"]:
-                d_str = day["date"]
-                dt_obj = datetime.date.fromisoformat(d_str)
-                
-                # Tier 1: CSV Events
-                day["tier1"] = by_date.get(d_str, [])
-                day["events"] = day["tier1"]
-                
-                # Tier 2: Special Days
-                sd = abs_special.get(d_str) or rec_special.get((dt_obj.month, dt_obj.day))
-                day["tier2"] = {
-                    "tags": sd.tags if sd else [],
-                    "where": sd.where if sd else [],
-                    "is_recurring": sd.is_recurring if sd else False
-                }
-                day["special_tags"] = day["tier2"]["tags"]
-                day["where"] = day["tier2"]["where"]
-                
-                # Tier 3: Unified Metadata
-                tier3_items = multi_map.get(d_str, [])
-                adv = advanced_map.get(d_str)
-                
-                day["tier3"] = {
-                    "cultural": tier3_items,
-                    "advanced": adv
-                }
-                day["advanced"] = adv
+                enricher.enrich(day)
 
     return {
-        "months": data, 
-        "events": events, 
-        "settings": settings, 
+        "months": data,
+        "events": store.events,
+        "settings": settings,
         "special_days": special_days,
-        "tags_config": tags_config
+        "tags_config": load_tags_config(),
+        "version": store.version,
     }
 
 
@@ -527,39 +629,29 @@ def get_settings():
 
 
 @app.post("/api/settings")
-def update_settings(settings: Settings):
+async def update_settings(settings: Settings):
     save_settings_to_disk(settings)
-    count = len(load_events_from_csv(settings)) if (settings.csv_path or settings.external_url) else 0
-    return {"status": "ok", "events_loaded": count, "settings": settings}
+    await store.refresh()
+    store.reschedule()
+    return {"status": "ok", "events_loaded": len(store.events), "settings": settings}
 
 
 @app.get("/api/stats")
 def get_stats():
     """Return summary stats for all loaded events."""
-    settings = load_settings()
-    events = load_events_from_csv(settings)
-    
-    total = len(events)
+    events = store.events
     categories = {}
-    
-    now = datetime.date.today()
+    today = datetime.date.today().isoformat()
     next_event = None
-    min_delta = datetime.timedelta(days=99999)
 
     for ev in events:
         cat = ev.get("category", "default")
         categories[cat] = categories.get(cat, 0) + 1
-        
-        # Find next event
-        start = datetime.date.fromisoformat(ev["start_date"])
-        if start >= now:
-            delta = start - now
-            if delta < min_delta:
-                min_delta = delta
-                next_event = ev
+        if ev["start_date"] >= today and (next_event is None or ev["start_date"] < next_event["start_date"]):
+            next_event = ev
 
     return {
-        "total_events": total,
+        "total_events": len(events),
         "categories": categories,
         "next_event": next_event,
     }
@@ -573,16 +665,13 @@ def get_week(
 ):
     """Return a week's days and events. Defaults to current week if no date given."""
     today = datetime.date.today()
+    anchor = today
     if year and month and day:
-        try:
+        with contextlib.suppress(ValueError):
             anchor = datetime.date(year, month, day)
-        except ValueError:
-            anchor = today
-    else:
-        anchor = today
     # Find Monday of the anchor week
     start_of_week = anchor - datetime.timedelta(days=anchor.weekday())
-    
+
     week_days = []
     for i in range(7):
         d = start_of_week + datetime.timedelta(days=i)
@@ -593,64 +682,17 @@ def get_week(
             "day_name": calendar.day_name[d.weekday()],
             "is_today": d == today
         })
-        
-    settings = load_settings()
-    events = load_events_from_csv(settings)
-    special_days = load_special_days()
-    abs_special = {d.date: d for d in special_days if not d.is_recurring and d.date}
-    rec_special = {(d.month, d.day): d for d in special_days if d.is_recurring and d.month and d.day}
-    
-    # Advanced data for the week — convert to datetime.date objects
-    week_start_date = datetime.date.fromisoformat(week_days[0]["date"])
-    week_end_date   = datetime.date.fromisoformat(week_days[-1]["date"])
-    advanced_map = get_advanced_data(week_start_date, week_end_date, settings)
-    multi_map = get_multicultural_map(week_start_date, week_end_date, settings)
-    
-    # Filter and attach events
-    for day in week_days:
-        d_iso = day["date"]
-        dt_obj = datetime.date.fromisoformat(d_iso)
-        
-        # Tier 1: CSV Events
-        day_events = []
-        for ev in events:
-            if ev["start_date"] <= d_iso <= ev["end_date"]:
-                day_events.append(ev)
-        day["tier1"] = day_events
-        day["events"] = day_events # legacy
-        
-        # Tier 2: Special Days
-        sd = abs_special.get(d_iso) or rec_special.get((dt_obj.month, dt_obj.day))
-        day["tier2"] = {
-            "tags": sd.tags if sd else [],
-            "where": sd.where if sd else [],
-            "is_recurring": sd.is_recurring if sd else False
-        }
-        # legacy
-        day["special_tags"] = day["tier2"]["tags"]
-        day["where"] = day["tier2"]["where"]
-            
-        # Tier 3: Cultural Calendars
-        tier3_items = multi_map.get(d_iso, [])
-        adv = advanced_map.get(d_iso)
-        day["tier3"] = {
-            "cultural": tier3_items,
-            "advanced": adv
-        }
-        day["advanced"] = adv # legacy
-            
+
+    enricher = DayEnricher(start_of_week, start_of_week + datetime.timedelta(days=6), load_settings(), load_special_days())
+    for d in week_days:
+        enricher.enrich(d)
     return {"days": week_days}
 
 
 @app.get("/api/events/all")
 def get_all_events():
     """Return all events sorted by start date."""
-    settings = load_settings()
-    events = load_events_from_csv(settings)
-    
-    # Sort by start_date
-    events.sort(key=lambda x: x["start_date"])
-    return {"events": events}
+    return {"events": sorted(store.events, key=lambda x: x["start_date"])}
 
 
 @app.get("/api/tags")
@@ -661,6 +703,7 @@ def get_tags():
 @app.post("/api/tags")
 def update_tags(config: TagsConfig):
     save_tags_config(config)
+    store.bump()
     return {"status": "ok", "config": config}
 
 
@@ -672,47 +715,22 @@ def get_all_special_days():
 @app.post("/api/special-days/assign")
 def assign_special_days(req: AssignRequest):
     current_days = load_special_days()
-    # We use a composite key: (date if not recurring else None, month if recurring else None, day if recurring else None)
-    # But simpler: just key by date for absolute, and a separate logic for recurring.
-    # To keep it simple for now, we'll store them all in one list and update by match.
-    
+
     for date_str in req.dates:
         dt = datetime.date.fromisoformat(date_str)
-        found = False
-        
         if req.is_recurring:
-            # Look for existing recurring entry for this month/day
-            for d in current_days:
-                if d.is_recurring and d.month == dt.month and d.day == dt.day:
-                    d.tags = req.tags
-                    d.where = req.where
-                    found = True
-                    break
-            if not found:
-                current_days.append(SpecialDay(
-                    month=dt.month, 
-                    day=dt.day, 
-                    is_recurring=True, 
-                    tags=req.tags, 
-                    where=req.where
-                ))
+            match = next((d for d in current_days if d.is_recurring and d.month == dt.month and d.day == dt.day), None)
+            new_day = SpecialDay(month=dt.month, day=dt.day, is_recurring=True)
         else:
-            # Look for existing absolute entry for this date
-            for d in current_days:
-                if not d.is_recurring and d.date == date_str:
-                    d.tags = req.tags
-                    d.where = req.where
-                    found = True
-                    break
-            if not found:
-                current_days.append(SpecialDay(
-                    date=date_str, 
-                    is_recurring=False, 
-                    tags=req.tags, 
-                    where=req.where
-                ))
-            
+            match = next((d for d in current_days if not d.is_recurring and d.date == date_str), None)
+            new_day = SpecialDay(date=date_str, is_recurring=False)
+        if match is None:
+            match = new_day
+            current_days.append(match)
+        match.tags = req.tags
+        match.where = req.where
+
     # Clean up: remove entries with no tags and no where
-    final_days = [d for d in current_days if d.tags or d.where]
-    save_special_days(final_days)
+    save_special_days([d for d in current_days if d.tags or d.where])
+    store.bump()
     return {"status": "ok", "count": len(req.dates)}

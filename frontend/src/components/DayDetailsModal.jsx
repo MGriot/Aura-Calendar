@@ -1,4 +1,5 @@
 import { X, Calendar as CalendarIcon, MapPin, Tag, CheckCircle } from 'lucide-react';
+import { DEFAULT_EVENT_COLOR } from '../utils/colors.js';
 
 export default function DayDetailsModal({
   day, tagsConfig, onClose, colorMap, eventTemplate
@@ -91,7 +92,7 @@ export default function DayDetailsModal({
           ) : (
             <div className="day-event-list">
               {events.map((ev, i) => {
-                const color = colorMap?.[ev.category] || '#3b82f6';
+                const color = colorMap?.[ev.category] || DEFAULT_EVENT_COLOR;
 
                 // Render user-provided template (simple variable replacement + minimal markdown)
                 const renderTemplate = (template, obj) => {

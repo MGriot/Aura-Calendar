@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Search, Filter, Calendar as CalIcon } from 'lucide-react';
+import { getCategoryColor } from '../utils/colors.js';
 
 export default function EventListView({ allEvents = [], settings }) {
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
   const [filtered, setFiltered] = useState(allEvents);
 
-  const colorMap = settings?.color_map || {};
 
   useEffect(() => {
     let res = allEvents;
@@ -61,8 +61,8 @@ export default function EventListView({ allEvents = [], settings }) {
               <span 
                 className="event-list-item__category" 
                 style={{ 
-                  backgroundColor: `${colorMap[ev.category] || '#3b82f6'}20`, 
-                  color: colorMap[ev.category] || '#3b82f6' 
+                  backgroundColor: `${getCategoryColor(settings, ev.category)}20`, 
+                  color: getCategoryColor(settings, ev.category) 
                 }}
               >
                 {ev.category}
