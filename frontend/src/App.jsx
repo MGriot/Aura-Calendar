@@ -75,14 +75,7 @@ export default function App() {
       const data = await res.json();
       setMonths(data.months);
       setAllEvents(data.events || []);
-      
-      // Ensure all requested components are enabled if missing
-      const updatedSettings = { ...data.settings };
-      if (updatedSettings && !updatedSettings.enabled_cultural_calendars) {
-        updatedSettings.enabled_cultural_calendars = ['holidays', 'chinese', 'catholic'];
-      }
-      
-      setSettings(updatedSettings);
+      setSettings(data.settings);
       setTagsConfig(data.tags_config);
     } catch (err) {
       console.error('Failed to fetch calendar:', err);

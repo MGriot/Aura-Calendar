@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Tag, Clock, Activity } from 'lucide-react';
+import { getCategoryColor } from '../utils/colors.js';
 
 export default function DashboardView({ settings }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const colorMap = settings?.color_map || {};
 
   useEffect(() => {
     fetch('/api/stats')
@@ -80,7 +80,7 @@ export default function DashboardView({ settings }) {
                     className="category-item__bar" 
                     style={{ 
                       width: `${(count / stats.total_events) * 100}%`,
-                      backgroundColor: colorMap[cat] || '#3b82f6'
+                      backgroundColor: getCategoryColor(settings, cat)
                     }} 
                   />
                 </div>
