@@ -86,7 +86,7 @@ export default function Header({
         </nav>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="header__actions">
         {reloadInterval > 0 && (
           <div className="auto-reload-timer" title="Auto-reload status">
             <small style={{ fontSize: '0.8rem' }}>Auto: {countdown || '—'}</small>
