@@ -7,6 +7,7 @@ import WeekView from './components/WeekView.jsx';
 import EventListView from './components/EventListView.jsx';
 import DayDetailsModal from './components/DayDetailsModal.jsx';
 import SpecialDaysView from './components/SpecialDaysView.jsx';
+import useDataVersion from './hooks/useDataVersion.js';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -15,7 +16,6 @@ export default function App() {
   const [startMonth, setStartMonth] = useState(() => Number(sessionStorage.getItem('aura-month')) || now.getMonth() + 1);
   const [startYear, setStartYear] = useState(() => Number(sessionStorage.getItem('aura-year')) || now.getFullYear());
   const [startDay, setStartDay] = useState(() => Number(sessionStorage.getItem('aura-day')) || now.getDate());
-  const [lastFetch, setLastFetch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('aura-theme') || 'dark');
@@ -66,6 +66,9 @@ export default function App() {
     localStorage.setItem('aura-theme', theme);
   }, [theme]);
 
+  // Backend-driven refresh: every view refetches when the data version changes
+  const { version, nextRefresh, refreshNow } = useDataVersion();
+
   const fetchCalendar = useCallback(async () => {
     setLoading(true);
     try {
@@ -75,42 +78,19 @@ export default function App() {
       const data = await res.json();
       setMonths(data.months);
       setAllEvents(data.events || []);
-      
-      // Ensure all requested components are enabled if missing
-      const updatedSettings = { ...data.settings };
-      if (updatedSettings && !updatedSettings.enabled_cultural_calendars) {
-        updatedSettings.enabled_cultural_calendars = ['holidays', 'chinese', 'catholic'];
-      }
-      
-      setSettings(updatedSettings);
+      setSettings(data.settings);
       setTagsConfig(data.tags_config);
     } catch (err) {
       console.error('Failed to fetch calendar:', err);
     } finally {
       setLoading(false);
     }
-  }, [startMonth, startYear]);
-
-  // update lastFetch timestamp when calendar is fetched
-  const fetchCalendarWithTimestamp = useCallback(async () => {
-    await fetchCalendar();
-    setLastFetch(Date.now());
-  }, [fetchCalendar]);
+  }, [startMonth, startYear, version]);
 
   useEffect(() => {
-    fetchCalendarWithTimestamp();
-  }, [fetchCalendarWithTimestamp]);
-
-  // Auto-reload polling
-  useEffect(() => {
-    if (settings?.reload_interval > 0) {
-      const ms = settings.reload_interval * 60 * 1000;
-      const timer = setInterval(() => {
-        fetchCalendarWithTimestamp();
-      }, ms);
-      return () => clearInterval(timer);
-    }
-  }, [settings?.reload_interval, fetchCalendarWithTimestamp]);
+    if (version === null) return; // wait for the first version to avoid a double fetch
+    fetchCalendar();
+  }, [fetchCalendar, version]);
 
   const navigate = (direction) => {
     if (activeTab === 'week') {
@@ -167,7 +147,8 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={handleSetActiveTab}
         reloadInterval={settings?.reload_interval}
-        lastFetch={lastFetch}
+        nextRefresh={nextRefresh}
+        onRefresh={refreshNow}
       />
 
       <main className="calendar-content">
@@ -177,8 +158,8 @@ export default function App() {
           </div>
         )}
 
-        {!loading && activeTab === 'dashboard' && (
-          <DashboardView settings={settings} />
+        {settings && activeTab === 'dashboard' && (
+          <DashboardView settings={settings} version={version} />
         )}
 
         {activeTab === 'month' && months && (
@@ -197,23 +178,24 @@ export default function App() {
           </div>
         )}
 
-        {!loading && activeTab === 'week' && (
-          <WeekView 
-            onDayClick={(day) => setSelectedDay(day)} 
+        {settings && activeTab === 'week' && (
+          <WeekView
+            onDayClick={(day) => setSelectedDay(day)}
             startYear={startYear}
             startMonth={startMonth}
-              startDay={startDay}
-              settings={settings}
-              tagsConfig={tagsConfig}
-            />
+            startDay={startDay}
+            settings={settings}
+            tagsConfig={tagsConfig}
+            version={version}
+          />
         )}
 
-        {!loading && activeTab === 'events' && (
+        {settings && activeTab === 'events' && (
           <EventListView allEvents={allEvents} settings={settings} />
         )}
 
         {activeTab === 'special_days' && (
-          <SpecialDaysView settings={settings} />
+          <SpecialDaysView settings={settings} version={version} />
         )}
       </main>
 
@@ -222,10 +204,7 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           theme={theme}
           setTheme={setTheme}
-          onSaved={() => {
-            setShowSettings(false);
-            fetchCalendar();
-          }}
+          onSaved={() => setShowSettings(false)} // backend refresh pushes a new version
         />
       )}
 

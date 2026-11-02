@@ -3,7 +3,7 @@ import { Save, Trash2, Plus, Minus, Check, X } from 'lucide-react';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-export default function SpecialDaysView({ settings }) {
+export default function SpecialDaysView({ settings, version }) {
   const [yearData, setYearData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDates, setSelectedDates] = useState([]);
@@ -36,8 +36,9 @@ export default function SpecialDaysView({ settings }) {
   };
 
   useEffect(() => {
+    if (version === null) return;
     fetchData();
-  }, [viewYear]);
+  }, [viewYear, version]);
 
   const toggleDate = (date) => {
     setSelectedDates(prev => 
@@ -145,7 +146,7 @@ export default function SpecialDaysView({ settings }) {
     }
   };
 
-  if (loading) return <div className="loader"><div className="loader-spinner" /></div>;
+  if (loading && !yearData) return <div className="loader"><div className="loader-spinner" /></div>;
 
   return (
     <div className="special-days-view">

@@ -13,9 +13,9 @@ export default function SettingsModal({ onClose = () => { }, onSaved = () => { }
     date_format: '%Y-%m-%d',
     color_map: {},
     enable_advanced_calendar: false,
-    advanced_countries: ['IT', 'US'],
+    advanced_countries: ['IT', 'US', 'MX', 'CZ'],
     show_special_days: true,
-    enabled_cultural_calendars: ['holidays', 'lunar', 'hebrew', 'islamic'],
+    enabled_cultural_calendars: ['holidays_it', 'holidays_us', 'holidays_mx', 'holidays_cz', 'lunar', 'hebrew', 'islamic', 'catholic'],
     reload_interval: 0,
     external_url: '',
     event_card_template: '**{{title}}**\nCategory: {{category}}\nFrom: {{start_date}}\nTo: {{end_date}}',
@@ -270,6 +270,7 @@ export default function SettingsModal({ onClose = () => { }, onSaved = () => { }
                   id="select-reload-interval"
                 >
                   <option value={0}>Manual Refresh Only</option>
+                  <option value={1}>Every Minute</option>
                   <option value={5}>Every 5 Minutes</option>
                   <option value={15}>Every 15 Minutes</option>
                   <option value={30}>Every 30 Minutes</option>
